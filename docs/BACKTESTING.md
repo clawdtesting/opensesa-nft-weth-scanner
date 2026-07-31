@@ -1,67 +1,74 @@
 # Backtesting
 
-This document describes the backtesting framework.
+Implemented in `src/services/backtest.ts` (`runBacktest`). It is **snapshot-driven
+and evidence-based**: signals come from what the strategy *saw* (stored
+`MarketSnapshot`s), and fills/exits are resolved against the *actual* `Sale`
+records that followed — using the shared, deterministic engine in
+`src/lib/sim/simengine.ts`. No randomness, so runs are reproducible.
 
-## Overview
+## Why snapshots
 
-The backtesting engine simulates historical performance of the strategy using stored market snapshots.
+You cannot honestly backtest "would this bid have filled?" from current state
+alone. Every scan writes a snapshot capturing floor, bids, realistic exit,
+recommended bid, score, ROI, etc. at that moment. The backtester replays those
+snapshots as the signals that would have fired.
 
-## Data Requirements
+## The models (shared with live paper trading)
 
-To run a backtest, we need:
-- Hourly (or higher frequency) market snapshots for each collection in the lookback period.
-- Snapshots include: floor, best bids, realistic exit, recommended bid, volume, sales, etc.
+**Fill** (`evaluateFill`): a WETH offer at `bid` fills the first time a seller is
+observed accepting an offer **at or below** the bid — i.e. an accepted-offer sale
+(`fromAcceptedOffer`, WETH-settled) priced `≤ bid` occurs within the fill window.
+Listing sales are *not* fill evidence.
 
-## Process
+**Exit** (`evaluateExit`): after filling at `entry`, we list at `target` (the
+snapshot's realistic exit) and exit the first time a buyer clears **at or above**
+target within `maxHoldHours`. If none appears, we force a mark-to-market close at
+the last observed sale (realistically modelling being stuck). Net profit subtracts
+marketplace fee + creator royalty (on exit proceeds) + gas.
 
-1. **Load Snapshots**: Read snapshots from the database for the date range.
-2. **Generate Signals**: For each timestamp and collection, apply the strategy configuration to determine if an opportunity exists.
-3. **Simulate Orders**: When an opportunity passes filters, place a simulated buy order at the recommended bid.
-4. **Fill Model**: Determine if the order would have filled based on historical bid-ask data and volume.
-   - We assume that if the recommended bid is at or above the historical ask price at that time, it fills immediately.
-   - More sophisticated models can use order book depth and time.
-5. **Track Position**: If filled, track the NFT until an exit condition is met.
-6. **Exit Model**: Determine when the position would be sold.
-   - Exit when market price reaches or exceeds the realistic exit price (from snapshot) for a sustained period.
-   - Or when a listing appears at or below target price.
-   - Or after a maximum holding period (configurable).
-7. **Calculate P&L**: Compute gross profit, subtract fees and gas, compute net profit and ROI.
+## Capital model
 
-## Metrics
+Signals are processed chronologically. Capital is committed on fill and released
+(with proceeds) at the modelled exit time, subject to:
 
-- Total return
-- Annualized return
-- Win rate (% of profitable trades)
-- Average holding period
-- Profit factor (gross profit / gross loss)
-- Maximum drawdown
-- Sharpe ratio (risk-adjusted return)
-- Number of trades
-- Average profit per trade
-- Profit per WETH per day
+- `startingCapitalEth`
+- `maxAllocationPerCollectionEth` (concentration cap)
+- `maxConcurrentPositions`
+- `minScore`, `minExpectedRoi` thresholds
+
+An equity curve is tracked to compute **max drawdown**.
 
 ## Configuration
 
-Backtest parameters:
-- Start date
-- End date
-- Initial capital (WETH)
-- Max allocation per collection (percent of capital)
-- Minimum opportunity score
-- Minimum expected ROI
-- Maximum number of concurrent positions
-- Slippage model
-- Fee model (OpenSea 2.5%, creator fee variable)
-- Gas cost estimate (in WETH)
+| Field | Meaning |
+| --- | --- |
+| `start` / `end` | Backtest window |
+| `startingCapitalEth` | Initial WETH |
+| `maxAllocationPerCollectionEth` | Per-collection cap |
+| `maxConcurrentPositions` | Concurrency limit |
+| `minScore` / `minExpectedRoi` | Signal thresholds |
+| `fillWindowHours` | How long an offer stays live |
+| `maxHoldHours` | Max hold before forced exit |
 
-## Output
+## Output metrics
 
-- Equity curve
-- Trade list (entry/exit times, prices, P&L)
-- Performance summary
-- Per-collection performance
-- Drawdown analysis
+Opportunities detected, orders simulated, fills, **fill rate**, positions exited,
+gross P&L, fees, **net P&L**, ROI, **win/loss rate**, **max drawdown**, average &
+median holding hours, **profit per WETH-hour**, final equity, a **per-collection**
+breakdown, and the full trade list.
 
-## Implementation
+## Running
 
-The backtesting engine can be run as a Node.js script or integrated into the web interface for interactive exploration.
+- UI: **Backtest** page.
+- API: `POST /api/backtest` with a JSON config.
+- CLI: `npm run backtest -- --days=7 --capital=10 --minScore=60 --minRoi=0.05`
+
+Requires a snapshot history — use `npm run db:seed` (ships a 3-day snapshot
+timeline) or accumulate live scans.
+
+## Roadmap
+
+The transparent heuristic fill/exit models are intentionally simple for V1 so
+results are explainable. Natural extensions: order-book-depth-aware fills,
+partial fills, and probability-weighted (Monte Carlo) exits validated against the
+heuristic probabilities in `probability.ts`.
