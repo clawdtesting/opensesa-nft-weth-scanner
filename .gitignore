@@ -1,0 +1,25 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+.dist/
+.next/
+out/
+build/
+dist/
+.cache/
+.tmp/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+
+# Misc
+.DS_Store
+Thumbs.db
