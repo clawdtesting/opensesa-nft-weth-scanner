@@ -179,6 +179,8 @@ export interface DropItem {
   totalSupply: number | null;
   /** Derived on the server at fetch time; the client recomputes live. */
   isLive: boolean;
+  /** True when this drop first appeared since the previous refresh. */
+  isNew?: boolean;
 
   /** Optional enrichment from existing scanner data when the collection exists. */
   scanner?: {

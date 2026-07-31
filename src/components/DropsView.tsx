@@ -11,6 +11,8 @@ interface DropsResponse {
   source: string;
   note?: string;
   error?: string;
+  lastRefreshAt?: string | null;
+  newCount?: number;
 }
 
 const TABS: Array<{ key: DropCategory; label: string }> = [
@@ -33,11 +35,11 @@ export function DropsView() {
   }, []);
 
   const load = useCallback(
-    async (category: DropCategory) => {
+    async (category: DropCategory, refresh = false) => {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`/api/drops?type=${category}`);
+        const res = await fetch(`/api/drops?type=${category}${refresh ? '&refresh=1' : ''}`);
         const raw = await res.text();
         let body: DropsResponse | null = null;
         try {
@@ -80,12 +82,26 @@ export function DropsView() {
           </button>
         ))}
         <button
-          onClick={() => load(tab)}
-          className="ml-auto text-xs text-terminal-muted hover:text-terminal-text border border-terminal-border rounded px-2 py-1.5"
+          onClick={() => load(tab, true)}
+          disabled={loading}
+          className="ml-auto text-xs text-terminal-muted hover:text-terminal-text border border-terminal-border rounded px-2 py-1.5 disabled:opacity-50"
         >
-          ↻ Refresh
+          {loading ? '…' : '↻ Refresh'}
         </button>
       </div>
+
+      {current && (
+        <div className="flex items-center gap-3 mb-3 text-[11px] text-terminal-muted">
+          {typeof current.newCount === 'number' && current.newCount > 0 && (
+            <span className="text-terminal-green">{current.newCount} new since last check</span>
+          )}
+          <span className="ml-auto">
+            {current.lastRefreshAt
+              ? `updated ${fmtTime(current.lastRefreshAt)}`
+              : 'not yet cached'}
+          </span>
+        </div>
+      )}
 
       {current?.note && (
         <p className="text-xs text-terminal-amber mb-3 border border-terminal-border rounded px-3 py-2 bg-terminal-panel">
@@ -133,6 +149,11 @@ function DropCard({ item, now }: { item: DropItem; now: number }) {
           <span className="text-[10px] uppercase tracking-wide border border-terminal-border rounded px-1.5 py-0.5 text-terminal-muted">
             Ξ ETH
           </span>
+          {item.isNew && (
+            <span className="text-[10px] uppercase tracking-wide border border-terminal-green text-terminal-green rounded px-1.5 py-0.5">
+              New
+            </span>
+          )}
           {item.featured && (
             <span className="text-[10px] uppercase tracking-wide border border-terminal-amber text-terminal-amber rounded px-1.5 py-0.5">
               Featured

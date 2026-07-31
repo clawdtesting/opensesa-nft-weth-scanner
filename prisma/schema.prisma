@@ -263,3 +263,33 @@ model StrategyConfiguration {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// Drops / mint discovery cache & snapshotting
+// ---------------------------------------------------------------------------
+
+// One row per (category, slug). Persisted so the Drops tabs load instantly from
+// the DB and so we can compute "new since last check" via firstSeenAt.
+model DropRecord {
+  id          String   @id @default(cuid())
+  category    String   // 'upcoming' | 'featured' | 'recently_minted'
+  slug        String
+  chain       String   @default("ethereum")
+  // The normalised DropItem (without live scanner enrichment) as JSON.
+  data        Json
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@unique([category, slug])
+  @@index([category, lastSeenAt])
+}
+
+// Per-category fetch metadata used to compute "new since last check" and to
+// serve a resilient cache when the upstream feed is temporarily unavailable.
+model DropFetchMeta {
+  category      String   @id
+  lastRefreshAt DateTime
+  prevRefreshAt DateTime?
+  source        String?
+  note          String?
+}

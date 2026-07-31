@@ -4,6 +4,7 @@ import { discoverCollections } from './discovery';
 import { ingestCollection } from './ingestion';
 import { buildSnapshot, rerankOpportunities } from './snapshot';
 import { recordPaperTrades } from './papertrading';
+import { refreshAllDrops } from './drops';
 import { logger } from '@/lib/logger';
 
 export interface ScanResult {
@@ -103,6 +104,9 @@ export async function runRotatingScan(opts: {
   if (slugs.length > 0) {
     await prisma.collection.updateMany({ where: { slug: { in: slugs } }, data: { active: true } });
   }
+
+  // Keep the Drops cache warm (cheap: 3 requests) so the tabs load instantly.
+  await refreshAllDrops().catch((err) => logger.warn('scan.drops_refresh_failed', { error: String(err) }));
 
   logger.info('scan.rotating_done', { batch: slugs.length, discover: Boolean(opts.discover) });
   return { ...result, batch: slugs };
