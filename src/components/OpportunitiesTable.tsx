@@ -67,6 +67,8 @@ export function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
   const [minSales, setMinSales] = useState(0);
   const [minAccepted, setMinAccepted] = useState(0);
   const [minRoi, setMinRoi] = useState(0);
+  const [floorMin, setFloorMin] = useState(0);
+  const [floorMax, setFloorMax] = useState(0); // 0 = no upper limit
   const [onlyPassing, setOnlyPassing] = useState(false);
 
   const filtered = useMemo(() => {
@@ -76,6 +78,8 @@ export function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
         r.sales24h >= minSales &&
         r.acceptedOffers24h >= minAccepted &&
         (r.expectedRoi ?? -Infinity) >= minRoi / 100 &&
+        (r.floor ?? 0) >= floorMin &&
+        (floorMax <= 0 || (r.floor ?? Infinity) <= floorMax) &&
         (!onlyPassing || r.passesFilter),
     );
     out.sort((a, b) => {
@@ -84,7 +88,7 @@ export function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
       return asc ? av - bv : bv - av;
     });
     return out;
-  }, [rows, sortKey, asc, minScore, minSales, minAccepted, minRoi, onlyPassing]);
+  }, [rows, sortKey, asc, minScore, minSales, minAccepted, minRoi, floorMin, floorMax, onlyPassing]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setAsc(!asc);
@@ -101,6 +105,8 @@ export function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
         <FilterNum label="Min sales 24h" value={minSales} setValue={setMinSales} step={1} />
         <FilterNum label="Min accepted 24h" value={minAccepted} setValue={setMinAccepted} step={1} />
         <FilterNum label="Min ROI %" value={minRoi} setValue={setMinRoi} step={1} />
+        <FilterNum label="Floor min (Ξ)" value={floorMin} setValue={setFloorMin} step={0.1} />
+        <FilterNum label="Floor max (Ξ, 0=∞)" value={floorMax} setValue={setFloorMax} step={0.1} />
         <label className="flex items-center gap-2 text-terminal-muted">
           <input type="checkbox" checked={onlyPassing} onChange={(e) => setOnlyPassing(e.target.checked)} />
           only passing filters
