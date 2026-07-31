@@ -1,127 +1,64 @@
 # Database Schema
 
-This document describes the database schema for the NFT WETH Scan application.
+Defined in `prisma/schema.prisma` (PostgreSQL). Monetary values are stored as
+`Float` in whole token units (ETH/WETH) — used for analysis/display only, never
+for signing. Run `npm run db:migrate` to create the schema, `npm run db:seed` to
+populate synthetic data.
 
-## Tables
+## Models
 
-### collections
-- id (PK)
-- chain (e.g., 1 for Ethereum)
-- contract_address (unique)
-- name
-- symbol
-- total_supply
-- description
-- image_url
-- opensea_url
-- twitter_username
-- discord_url
-- created_at
-- updated_at
+### `Collection`
+Reference data for a monitored collection: `slug` (unique), `chain`, `contract`,
+`name`, `totalSupply`, `imageUrl`, `openseaUrl`, `marketplaceFeeBps`,
+`creatorFeeBps`, plus `discovered` / `active` flags set by discovery's cheap
+filter. Indexed on `(chain, active)` and `updatedAt`.
 
-### nfts
-- id (PK)
-- collection_id (FK to collections.id)
-- token_id (unique within collection)
-- metadata (JSON)
-- created_at
+### `Sale`
+An ingested sale. `eventId` is `@unique` for deterministic dedup.
+`fromAcceptedOffer` marks WETH-settled sales (the accepted-offer signal);
+`floorAtSale` records the floor at sale time to derive seller concession. Indexed
+on `(collectionId, timestamp)` and `(collectionId, fromAcceptedOffer, timestamp)`.
 
-### sales
-- id (PK)
-- nft_id (FK to nfts.id)
-- buyer_address
-- seller_address
-- price_amount (in wei of payment token)
-- payment_token_address
-- transaction_hash (unique)
-- block_number
-- timestamp
-- auction_type
+### `Listing`
+Active asks (`orderHash` unique, `priceEth`, `endTime`, `active`). The ingestion
+step deactivates the prior book and rewrites the current one. Indexed on
+`(collectionId, active, priceEth)`.
 
-### listings (asks)
-- id (PK)
-- nft_id (FK to nfts.id)
-- seller_address
-- price_amount (wei)
-- payment_token_address
-- transaction_hash (when created)
-- expiry_timestamp
-- created_at
-- updated_at
+### `Offer`
+Collection/token/trait WETH bids (`orderHash` unique, per-item `priceEth`,
+`quantity`, `offerType`, `expiration`, `active`). `OfferType` enum:
+`COLLECTION | TOKEN | TRAIT`. Indexed on `(collectionId, active, offerType, priceEth)`.
 
-### offers (bids)
-- id (PK)
-- nft_id (FK to nfts.id, nullable for collection offers)
-- bidder_address
-- price_amount (wei)
-- payment_token_address
-- expiration_timestamp
-- created_at
-- updated_at
+### `MarketSnapshot`
+The historical backbone — one row per collection per scan. Stores floor, realistic
+exit + confidence, top-3 bids, sales/volume across 1h/6h/24h/7d, unique
+buyers/sellers, accepted-offer counts + median concession, floor depth
+(1/2/5/10%), bid depth (1/2/5/10%), recommended bid, expected profit/ROI,
+fill/exit probabilities, estimated holding hours, capital efficiency, `score`, and
+a `scoreDetail` JSON blob (components, penalties, reason, exit/bid explanations).
+Indexed on `(collectionId, timestamp)` and `timestamp`. **Snapshots are what make
+backtesting possible** — they capture what the strategy saw *before* each sale.
 
-### market_snapshots
-- id (PK)
-- collection_id (FK)
-- timestamp
-- floor_price (from listings)
-- real_time_price (volume-weighted average price of recent sales)
-- best_bid (highest bid)
-- second_best_bid
-- third_best_bid
-- bid_depth_1pct (total bid value within 1% of floor)
-- bid_depth_5pct
-- bid_depth_10pct
-- ask_depth_1pct (total ask value within 1% of floor)
-- ask_depth_5pct
-- ask_depth_10pct
-- sales_count_1h
-- sales_count_24h
-- volume_1h
-- volume_24h
-- unique_buyers_24h
-- unique_sellers_24h
-- average_sale_price_1h
-- average_sale_price_24h
-- recommended_bid
-- expected_profit
-- expected_roi
-- opportunity_score
+### `Opportunity`
+Denormalised latest opportunity per collection (`collectionId` unique) for fast
+dashboard reads: `score`, `rank`, `passesFilter`, `reason`, `detail`. Indexed on
+`score`.
 
-### opportunities
-- id (PK)
-- collection_id (FK)
-- timestamp
-- score
-- rank
-- passes_filter (boolean)
-- notes
+### `SimulatedOrder` / `SimulatedPosition`
+Paper-trading + backtest records. `SimulatedOrder` (status
+`OPEN|FILLED|CANCELLED|EXPIRED`) has an optional `runId` grouping a backtest run
+(null = live paper trading). `SimulatedPosition` (status `OPEN|CLOSED`) tracks
+entry/exit, gross/net profit, fees, gas, ROI and holding hours.
 
-### strategy_config
-- id (PK)
-- key (unique)
-- value
-- description
+### `StrategyConfiguration`
+Named, versioned strategy configs stored as JSON (`isDefault` marks the active
+one). Lets thresholds/weights be edited without code changes; the snapshot service
+loads the default row and falls back to `DEFAULT_STRATEGY`.
 
-### simulated_orders
-- id (PK)
-- collection_id
-- token_id
-- bid_amount
-- bid_timestamp
-- filled (boolean)
-- fill_timestamp
-- fill_price
-- exit_price
-- exit_timestamp
-- profit_loss
+## Design notes
 
-### simulated_positions
-- id (PK)
-- simulation_run_id
-- entry_order_id
-- exit_order_id
-- entry_price
-- exit_price
-- quantity
-- profit_loss
-- duration_hours
+- **Deterministic identities** (`Sale.eventId`, `*.orderHash` unique) make
+  ingestion idempotent.
+- **Cascade deletes** from `Collection` keep the graph consistent.
+- Indexes target the hot paths: ranking by score, time-windowed sales queries, and
+  active-book lookups.

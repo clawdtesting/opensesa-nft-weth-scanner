@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0a0e14;
+  color: #c7d1db;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+/* Numeric cells use tabular figures for clean column alignment. */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+table.terminal {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+
+table.terminal th,
+table.terminal td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #1e2733;
+  white-space: nowrap;
+}
+
+table.terminal th {
+  text-align: left;
+  color: #5c6b7a;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  background: #0a0e14;
+}
+
+table.terminal tbody tr:hover {
+  background: #111721;
+}
+
+.pos {
+  color: #26d07c;
+}
+.neg {
+  color: #ff5c72;
+}
+.dim {
+  color: #5c6b7a;
+}

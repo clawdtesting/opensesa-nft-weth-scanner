@@ -1,73 +1,65 @@
 # Opportunity Scoring
 
+Implemented in `src/lib/calc/score.ts` (`computeOpportunityScore`) and configured
+via `src/config/strategy.ts`. The score is a **0–100 relative ranking of
+risk-adjusted edge** — not a probability and not a promise of profit.
 
-<tool_call>
-<function=write_file>
-<parameter=content>
-# Scoring Model
+```
+score = Σ (componentᵢ · weightᵢ)  −  Σ risk penalties        (clamped to 0…100)
+```
 
-This document describes the opportunity scoring algorithm.
+Every component, weighted contribution, penalty and a human-readable `reason` are
+returned and persisted in `MarketSnapshot.scoreDetail`, then rendered on the
+collection page — the number is always auditable.
 
-## Components
+## Components (each normalised to 0–100)
 
-The opportunity score is a weighted sum of normalized factors, each scaled 0-100.
+| Component | Weight | Definition |
+| --- | --- | --- |
+| Liquidity | 25% | Mean of log-scaled 24h volume and 24h sales count. Transaction count matters as much as raw volume. |
+| Executable spread | 20% | `expectedRoi` (net of fees/gas/risk) scaled against `norms.spreadFullScore`. |
+| Accepted-bid activity | 15% | 60% accepted-offers-24h count + 40% median seller concession. |
+| Fill probability | 15% | `fillProbability × 100` (see `probability.ts`). |
+| Exit probability | 10% | `exitProbability24h × 100`. |
+| Floor structure | 5% | Inverse of the floor-wall ratio — a thin wall relative to sales is healthy. |
+| Momentum | 5% | Short-term price trend mapped from [-1,1] to [0,100]. |
+| Capital efficiency | 5% | Log-scaled risk-adjusted profit per WETH-hour. |
 
-### 1. Liquidity (25%)
-Based on trading volume and transaction count.
-- Volume score: log(volume_24h_eth) normalized across collections
-- Transaction score: log(sales_count_24h) normalized
-- Combined: average of volume and transaction scores
+Weights live in `scoreWeights` and normalisation ceilings in `norms`; both are
+overridable per `StrategyConfiguration`.
 
-### 2. Executable Spread (20%)
-The spread between recommended bid and realistic exit price, minus fees and gas.
-- spread = (realistic_exit - recommended_bid - fees - gas) / recommended_bid
-- Normalized: spread * 100 (capped at 200% for scoring)
+## Risk penalties
 
-### 3. Accepted Bid Activity (15%)
-Measures how often sellers accept bids below floor.
-- accepted_offers_24h count
-- average discount to floor of accepted offers
-- Higher count and higher discount -> higher score
+Subtracted after the weighted sum (`score.ts`):
 
-### 4. Fill Probability (15%)
-Estimated likelihood that a bid at the recommended price will be accepted.
-- Based on historical fill rates for similar bid competitiveness
-- Factors: bid depth, distance from best bid, seller acceptance history
+| Penalty | Points | Trigger |
+| --- | --- | --- |
+| No sales in 6h | 10 | `sales6h === 0` |
+| Very low tx count | 10 | `sales24h < 5` |
+| Rapidly falling floor | 15 | 6h floor drop > `maxFloorDrop6h` |
+| Large floor wall | 8 | `floorWallRatio > 5` |
+| Extremely thin bidding | 5 | single lone offer |
+| Extreme bid concentration | 5 | `bidDepth1 ≥ 8` |
+| Single-sale volume distortion | 8 | `mean/median sale > 3` |
+| Possible fake floor | 6 | only one listing within 10% of floor |
 
-### 5. Exit Probability (10%)
-Estimated likelihood that an acquired NFT can be sold at the realistic exit price within a horizon.
-- Based on sales velocity, floor depth, and buyer demand
+These are exactly what make the scanner reject a **dead collection with a giant
+headline spread**: it can have an 85% `floor − bestBid` gap yet score ~0 because
+it has no sales, no accepted offers, and negligible executable ROI after costs.
 
-### 6. Floor Structure (5%)
-Evaluates the density of listings near floor.
-- Listings within 5% of floor: fewer is better (indicates less sell pressure)
-- Ratio of listingsWithin5pct to sales24h (lower ratio = healthier)
+## Filters (pass/fail, separate from score)
 
-### igher Momentum (5%)
-Recent price trend and volume momentum.
-- price_change_1h
-- volume_change_1h
-- Combined with decay.
+`passesFilters` (`src/domain/analyze.ts`) applies the `StrategyFilters` minimums
+(sales, volume, accepted offers, raw spread, expected ROI, max floor drop, min
+score). An opportunity can appear in the table but be marked "filtered" if it
+fails these — the dashboard can hide non-passing rows.
 
-### 8. Capital Efficiency (5%)
-Expected profit per WETH per hour.
-- (expected_profit * fill_probability * exit_probability) / (recommended_bid * expected_holding_hours)
+## Worked example (from seed data)
 
-## Risk Penalties
+The *Healthy Liquid* archetype: 40 sales/24h, 14 accepted offers, 28% raw spread,
+~30% executable ROI, thin floor wall, slight positive momentum → **~82/100,
+passes**. The *Dead / Giant Spread* archetype: 1 old sale, huge raw spread →
+**~0/100, filtered**.
 
-Subtract points for risk factors:
-- No sales in last 6h: -10
-- Very low transaction count (<5 in 24h): -10
-- Rapidly falling floor (>10% drop in 6h): -15
-- Thin order book (bid depth < 0.5 ETH): -5
-- Extreme holder concentration (top 10 owners hold >90%): -10 (if data available)
-- Wash trading detected (unusual patterns): -20
-
-## Final Score
-
-Score = sum(weighted components) - risk penalties
-Clamped between 0 and 100.
-
-## Example Calculation
-
-See docs/EXAMPLE_SCORING.md for a walkthrough.
+See `tests/score.test.ts` and `tests/analyze.test.ts` for executable
+specifications of every rule above.

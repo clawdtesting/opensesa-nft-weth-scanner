@@ -20,6 +20,16 @@ dist/
 .env.development
 .env.production
 
+# Prisma / generated
+src/generated/
+prisma/*.db
+
+# Test / coverage
+coverage/
+
+# TS build info
+*.tsbuildinfo
+
 # Misc
 .DS_Store
 Thumbs.db

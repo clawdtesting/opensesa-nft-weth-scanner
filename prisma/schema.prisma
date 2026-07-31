@@ -1,0 +1,265 @@
+// OpenSea NFT WETH Spread & Liquidity Scanner — data model
+// See docs/DATABASE.md for a narrative description.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Core reference data
+// ---------------------------------------------------------------------------
+
+model Collection {
+  id           String   @id @default(cuid())
+  chain        String   @default("ethereum")
+  slug         String   @unique
+  contract     String?
+  name         String
+  totalSupply  Int?
+  imageUrl     String?
+  openseaUrl   String?
+  // Fee basis points (e.g. 250 = 2.5%). marketplaceFeeBps is OpenSea's take,
+  // creatorFeeBps is the aggregate creator royalty enforced on offers.
+  marketplaceFeeBps Int  @default(250)
+  creatorFeeBps     Int  @default(0)
+  // Cheap-filter fields refreshed by discovery so we can skip dead collections.
+  discovered   Boolean  @default(false)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales        Sale[]
+  listings     Listing[]
+  offers       Offer[]
+  snapshots    MarketSnapshot[]
+  opportunities Opportunity[]
+  simOrders    SimulatedOrder[]
+
+  @@index([chain, active])
+  @@index([updatedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Ingested market events
+// ---------------------------------------------------------------------------
+
+model Sale {
+  id              String   @id @default(cuid())
+  collectionId    String
+  collection      Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  tokenId         String
+  // Deterministic identity: OpenSea event orderHash / tx hash + log index.
+  eventId         String   @unique
+  transactionHash String?
+  buyer           String?
+  seller          String?
+  // Price stored as a decimal string in native token units (e.g. "1.23").
+  priceEth        Float
+  currency        String   @default("ETH")
+  // Whether the sale most likely originated from an accepted collection/token offer.
+  fromAcceptedOffer Boolean @default(false)
+  // Floor price observed at (or nearest before) the sale, when a snapshot exists.
+  floorAtSale     Float?
+  timestamp       DateTime
+
+  collectionRef   String? // free-form provenance note
+
+  @@index([collectionId, timestamp])
+  @@index([collectionId, fromAcceptedOffer, timestamp])
+}
+
+model Listing {
+  id            String   @id @default(cuid())
+  collectionId  String
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  tokenId       String?
+  orderHash     String   @unique
+  seller        String?
+  priceEth      Float
+  currency      String   @default("ETH")
+  startTime     DateTime?
+  endTime       DateTime?
+  active        Boolean  @default(true)
+  seenAt        DateTime @default(now())
+
+  @@index([collectionId, active, priceEth])
+}
+
+model Offer {
+  id            String   @id @default(cuid())
+  collectionId  String
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  // null tokenId => collection-wide offer (the V1 priority).
+  tokenId       String?
+  orderHash     String   @unique
+  offerer       String?
+  // Per-item price in WETH (offers are denominated in WETH on OpenSea).
+  priceEth      Float
+  currency      String   @default("WETH")
+  quantity      Int      @default(1)
+  offerType     OfferType @default(COLLECTION)
+  expiration    DateTime?
+  active        Boolean  @default(true)
+  seenAt        DateTime @default(now())
+
+  @@index([collectionId, active, offerType, priceEth])
+}
+
+enum OfferType {
+  COLLECTION
+  TOKEN
+  TRAIT
+}
+
+// ---------------------------------------------------------------------------
+// Derived analytics
+// ---------------------------------------------------------------------------
+
+model MarketSnapshot {
+  id            String   @id @default(cuid())
+  collectionId  String
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  timestamp     DateTime @default(now())
+
+  floor         Float?
+  realisticExit Float?
+  exitConfidence Float?
+
+  bestBid       Float?
+  secondBid     Float?
+  thirdBid      Float?
+  offerCount    Int      @default(0)
+  distanceBestToSecond Float?
+
+  sales1h       Int      @default(0)
+  sales6h       Int      @default(0)
+  sales24h      Int      @default(0)
+  sales7d       Int      @default(0)
+  volume1h      Float    @default(0)
+  volume24h     Float    @default(0)
+  volume7d      Float    @default(0)
+  uniqueBuyers24h  Int   @default(0)
+  uniqueSellers24h Int   @default(0)
+  medianSale24h Float?
+
+  acceptedOffers1h  Int  @default(0)
+  acceptedOffers24h Int  @default(0)
+  acceptedOffers7d  Int  @default(0)
+  medianSellerConcession Float?
+
+  floorDepth1   Int      @default(0)
+  floorDepth2   Int      @default(0)
+  floorDepth5   Int      @default(0)
+  floorDepth10  Int      @default(0)
+
+  bidDepth1     Int      @default(0)
+  bidDepth2     Int      @default(0)
+  bidDepth5     Int      @default(0)
+  bidDepth10    Int      @default(0)
+
+  recommendedBid Float?
+  expectedProfit Float?
+  expectedRoi    Float?
+  fillProbability Float?
+  exitProbability24h Float?
+  exitProbability72h Float?
+  estimatedHoldingHours Float?
+  capitalEfficiency Float?
+
+  score         Float?
+  // JSON blob of score components + risk penalties + human reason.
+  scoreDetail   Json?
+
+  @@index([collectionId, timestamp])
+  @@index([timestamp])
+}
+
+// Latest computed opportunity per collection (denormalized for fast dashboard reads).
+model Opportunity {
+  id            String   @id @default(cuid())
+  collectionId  String   @unique
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  snapshotId    String?
+  score         Float
+  rank          Int?
+  passesFilter  Boolean  @default(false)
+  reason        String?
+  detail        Json?
+  updatedAt     DateTime @updatedAt
+
+  @@index([score])
+}
+
+// ---------------------------------------------------------------------------
+// Simulation / paper trading
+// ---------------------------------------------------------------------------
+
+model SimulatedOrder {
+  id            String   @id @default(cuid())
+  collectionId  String
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  runId         String?  // groups a backtest run; null for live paper trading
+  tokenId       String?
+  bidEth        Float
+  bidAt         DateTime @default(now())
+  status        OrderStatus @default(OPEN)
+  filledAt      DateTime?
+  fillEth       Float?
+  detail        Json?
+
+  position      SimulatedPosition?
+
+  @@index([runId])
+  @@index([collectionId, status])
+}
+
+enum OrderStatus {
+  OPEN
+  FILLED
+  CANCELLED
+  EXPIRED
+}
+
+model SimulatedPosition {
+  id            String   @id @default(cuid())
+  orderId       String   @unique
+  order         SimulatedOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  runId         String?
+  entryEth      Float
+  entryAt       DateTime
+  exitEth       Float?
+  exitAt        DateTime?
+  status        PositionStatus @default(OPEN)
+  grossProfit   Float?
+  fees          Float?
+  gas           Float?
+  netProfit     Float?
+  roi           Float?
+  holdingHours  Float?
+
+  @@index([runId, status])
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+model StrategyConfiguration {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  isDefault   Boolean  @default(false)
+  // Full strategy config serialized as JSON (see src/config/strategy.ts).
+  config      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

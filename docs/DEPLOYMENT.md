@@ -55,10 +55,16 @@ NODE_ENV=development
 Run Prisma migrations to create the schema:
 
 ```bash
-npx prisma migrate dev
+npm run db:migrate        # prisma migrate dev
 ```
 
-### 5. Start the development server
+### 5. (Optional) Seed synthetic data
+
+```bash
+npm run db:seed           # populates the app so it works without an API key
+```
+
+### 6. Start the development server
 
 ```bash
 npm run dev
@@ -68,26 +74,24 @@ The application will be available at http://localhost:3000
 
 ## Production Deployment
 
-### Option 1: Vercel (Recommended for frontend)
+For any platform: set the environment variables, run `npm run build`, apply
+migrations with `npm run db:deploy` (`prisma migrate deploy`), then `npm start`.
 
-1. Push your code to GitHub
-2. Import the project in Vercel
-3. Set the environment variables in the Vercel dashboard
-4. Vercel will automatically build and deploy
+### Option 1: Vercel + a managed Postgres (Supabase / Neon)
 
-### Option 2: Docker
+1. Push your code to GitHub and import the project in Vercel.
+2. Provision Postgres (e.g. Supabase) and set `DATABASE_URL`, `OPENSEA_API_KEY`.
+3. Vercel builds and deploys automatically. Run `npm run db:deploy` against the
+   database once (locally or via a deploy hook).
+4. Trigger scans on a schedule by POSTing to `/api/scan` from a cron
+   (Vercel Cron, GitHub Actions, or an external scheduler).
 
-Build the Docker image:
+### Option 2: Render / Railway
 
-```bash
-docker build -t opensea-scanner .
-```
-
-Run with docker-compose (see docker-compose.yml) or directly:
-
-```bash
-docker run -p 3000:3000 --env-file .env opensea-scanner
-```
+1. Create a Web Service from the repo and a managed PostgreSQL instance.
+2. Build command `npm run build`, start command `npm start`.
+3. Set env vars; run `npm run db:deploy` as a release/pre-deploy step.
+4. Add a scheduled job (Render Cron / Railway cron) that runs `npm run scan`.
 
 ### Option 3: Manual Server
 
