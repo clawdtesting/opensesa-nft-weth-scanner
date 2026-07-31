@@ -5,52 +5,70 @@ import { parseFees } from '@/lib/opensea/parse';
 import { env } from '@/config/env';
 import { logger } from '@/lib/logger';
 
+export interface DiscoveryOptions {
+  limit?: number;
+  /** Only keep collections whose OpenSea floor is at or below this (ETH). */
+  maxFloor?: number;
+  /**
+   * Also pull the newest collections (order_by=created_date), not just top
+   * volume — needed to reach cheap/low-floor collections. Defaults to true when
+   * maxFloor is set.
+   */
+  includeNewest?: boolean;
+}
+
 /**
  * Collection discovery.
  *
- * Pipeline: pull top-volume collections from OpenSea + any configured seed
- * slugs, upsert lightweight Collection rows, and apply a *cheap* stats filter
- * (24h volume / sales) so expensive deep scans only run on collections that show
- * baseline life. Deep analysis happens later in the ingestion service.
+ * Gathers candidate slugs (top 7-day volume, optionally plus newest), upserts
+ * lightweight Collection rows, and applies a cheap stats filter (24h volume /
+ * sales, and an optional floor cap) so expensive deep scans only run on
+ * collections that clear the bar. Returns the kept slugs.
  */
-export async function discoverCollections(opts: { limit?: number } = {}): Promise<string[]> {
+export async function discoverCollections(opts: DiscoveryOptions = {}): Promise<string[]> {
   const client = getOpenSeaClient();
   const limit = opts.limit ?? env.discoveryLimit;
+  const includeNewest = opts.includeNewest ?? opts.maxFloor !== undefined;
   const slugs = new Set<string>(env.seedSlugs);
 
-  try {
-    let next: string | undefined;
-    while (slugs.size < limit) {
-      const page = await client.listCollections({ orderBy: 'seven_day_volume', limit: 100, next });
-      for (const c of page.collections ?? []) {
-        if (c.collection) slugs.add(c.collection);
-        if (slugs.size >= limit) break;
+  const gather = async (orderBy: 'seven_day_volume' | 'created_date', cap: number) => {
+    try {
+      let next: string | undefined;
+      while (slugs.size < cap) {
+        const page = await client.listCollections({ orderBy, limit: 100, next });
+        for (const c of page.collections ?? []) {
+          if (c.collection) slugs.add(c.collection);
+          if (slugs.size >= cap) break;
+        }
+        if (!page.next) break;
+        next = page.next;
       }
-      if (!page.next) break;
-      next = page.next;
+    } catch (err) {
+      logger.error('discovery.list_failed', { orderBy, error: String(err) });
     }
-  } catch (err) {
-    logger.error('discovery.list_failed', { error: String(err) });
-  }
+  };
 
-  logger.info('discovery.candidates', { count: slugs.size });
+  await gather('seven_day_volume', includeNewest ? Math.ceil(limit / 2) : limit);
+  if (includeNewest) await gather('created_date', limit);
+
+  logger.info('discovery.candidates', { count: slugs.size, includeNewest, maxFloor: opts.maxFloor });
 
   const kept: string[] = [];
   for (const slug of slugs) {
     try {
-      const passed = await upsertAndFilter(slug);
+      const passed = await upsertAndFilter(slug, opts.maxFloor);
       if (passed) kept.push(slug);
     } catch (err) {
       logger.warn('discovery.slug_failed', { slug, error: String(err) });
     }
   }
 
-  logger.info('discovery.kept', { count: kept.length });
+  logger.info('discovery.kept', { count: kept.length, maxFloor: opts.maxFloor });
   return kept;
 }
 
-/** Upsert a collection's metadata + fees and return whether it clears the cheap filter. */
-async function upsertAndFilter(slug: string): Promise<boolean> {
+/** Upsert a collection's metadata + fees; return whether it clears the filters. */
+async function upsertAndFilter(slug: string, maxFloor?: number): Promise<boolean> {
   const client = getOpenSeaClient();
   const [meta, stats] = await Promise.all([
     client.getCollection(slug),
@@ -64,10 +82,14 @@ async function upsertAndFilter(slug: string): Promise<boolean> {
   const oneDay = stats.intervals?.find((i) => i.interval === 'one_day');
   const volume24h = oneDay?.volume ?? 0;
   const sales24h = oneDay?.sales ?? 0;
+  const floor = stats.total?.floor_price;
 
-  // Cheap filter: skip collections with essentially no daily activity. Uses a
-  // deliberately loose threshold so borderline collections still get a deep scan.
-  const active = volume24h >= 1 || sales24h >= 3;
+  // Cheap filter: baseline daily activity …
+  const hasActivity = volume24h >= 1 || sales24h >= 3;
+  // … plus an optional floor cap (skip when floor is unknown and a cap is set).
+  const withinFloor =
+    maxFloor === undefined ? true : typeof floor === 'number' && floor > 0 && floor <= maxFloor;
+  const active = hasActivity && withinFloor;
 
   await prisma.collection.upsert({
     where: { slug },

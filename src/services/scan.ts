@@ -21,9 +21,17 @@ export interface ScanResult {
  * Designed to be safe to run repeatedly (e.g. on a cron / interval). Failures on
  * one collection never abort the whole cycle.
  */
-export async function runScan(opts: { limit?: number; slugs?: string[] } = {}): Promise<ScanResult> {
+export async function runScan(
+  opts: { limit?: number; slugs?: string[]; maxFloor?: number; includeNewest?: boolean } = {},
+): Promise<ScanResult> {
   const start = Date.now();
-  const slugs = opts.slugs ?? (await discoverCollections({ limit: opts.limit }));
+  const slugs =
+    opts.slugs ??
+    (await discoverCollections({
+      limit: opts.limit,
+      maxFloor: opts.maxFloor,
+      includeNewest: opts.includeNewest,
+    }));
   logger.info('scan.start', { collections: slugs.length });
 
   let scanned = 0;
