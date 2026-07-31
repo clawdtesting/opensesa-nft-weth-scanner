@@ -105,8 +105,8 @@ export function OpportunitiesTable({ rows }: { rows: OpportunityRow[] }) {
         <FilterNum label="Min sales 24h" value={minSales} setValue={setMinSales} step={1} />
         <FilterNum label="Min accepted 24h" value={minAccepted} setValue={setMinAccepted} step={1} />
         <FilterNum label="Min ROI %" value={minRoi} setValue={setMinRoi} step={1} />
-        <FilterNum label="Floor min (Ξ)" value={floorMin} setValue={setFloorMin} step={0.1} />
-        <FilterNum label="Floor max (Ξ, 0=∞)" value={floorMax} setValue={setFloorMax} step={0.1} />
+        <FilterNum label="Floor min (Ξ)" value={floorMin} setValue={setFloorMin} step={0.01} />
+        <FilterNum label="Floor max (Ξ, 0=∞)" value={floorMax} setValue={setFloorMax} step={0.01} />
         <label className="flex items-center gap-2 text-terminal-muted">
           <input type="checkbox" checked={onlyPassing} onChange={(e) => setOnlyPassing(e.target.checked)} />
           only passing filters
