@@ -25,10 +25,13 @@ export async function ingestCollection(slug: string): Promise<{
   const nowSec = Math.floor(Date.now() / 1000);
 
   // ---- Sales (last 7 days) ---------------------------------------------
+  // Page depth is bounded so a live scan stays well within a serverless
+  // function timeout; 5 pages × 50 = up to 250 recent sales, ample for the
+  // 1h/6h/24h velocity windows and 7d volume.
   const rawEvents = await client.collectEvents(
     slug,
     { eventType: ['sale'], after: nowSec - 7 * DAY, limit: 50 },
-    20,
+    5,
   );
   const sales: SaleRecord[] = [];
   for (const ev of rawEvents) {
@@ -58,7 +61,7 @@ export async function ingestCollection(slug: string): Promise<{
   }
 
   // ---- Listings (cheapest) ---------------------------------------------
-  const rawListings = await client.collectBestListings(slug, 3, 100);
+  const rawListings = await client.collectBestListings(slug, 2, 100);
   const listings: ListingRecord[] = [];
   // Mark previous listings inactive; we rewrite the current book each scan.
   await prisma.listing.updateMany({ where: { collectionId: collection.id }, data: { active: false } });
@@ -84,7 +87,7 @@ export async function ingestCollection(slug: string): Promise<{
   }
 
   // ---- Offers (collection-wide WETH bids) ------------------------------
-  const rawOffers = await client.collectCollectionOffers(slug, 3, 100);
+  const rawOffers = await client.collectCollectionOffers(slug, 2, 100);
   const offers: OfferRecord[] = [];
   await prisma.offer.updateMany({ where: { collectionId: collection.id }, data: { active: false } });
   for (const o of rawOffers) {

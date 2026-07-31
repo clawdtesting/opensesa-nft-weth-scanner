@@ -13,9 +13,26 @@ export function ScanButton() {
     setMessage('');
     try {
       const res = await fetch('/api/scan', { method: 'POST' });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? 'Scan failed');
-      setMessage(`Scanned ${body.scanned}, ${body.opportunities} opportunities`);
+      // The endpoint can return a non-JSON error page (e.g. a platform timeout),
+      // so read text first and parse defensively instead of assuming JSON.
+      const raw = await res.text();
+      let body: { scanned?: number; opportunities?: number; error?: string } | null = null;
+      try {
+        body = raw ? JSON.parse(raw) : null;
+      } catch {
+        body = null;
+      }
+
+      if (!res.ok || !body) {
+        const reason =
+          body?.error ??
+          (res.status === 504 || /timed? out|timeout/i.test(raw)
+            ? 'Scan timed out on the server. Try a smaller batch, or run `npm run scan` from a terminal.'
+            : `Scan failed (HTTP ${res.status}).`);
+        throw new Error(reason);
+      }
+
+      setMessage(`Scanned ${body.scanned ?? 0}, ${body.opportunities ?? 0} opportunities`);
       setState('idle');
       router.refresh();
     } catch (err) {
