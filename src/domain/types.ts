@@ -152,3 +152,41 @@ export interface OpportunityScore {
   riskPenalties: Array<{ reason: string; points: number }>;
   reason: string;
 }
+
+// ---------------------------------------------------------------------------
+// Drops / mint discovery (Ethereum only)
+// ---------------------------------------------------------------------------
+
+export type DropCategory = 'upcoming' | 'featured' | 'recently_minted';
+
+/** A normalised OpenSea drop, plus optional enrichment from the scanner. */
+export interface DropItem {
+  slug: string;
+  name: string;
+  chain: string;
+  imageUrl: string | null;
+  contract: string | null;
+  openseaUrl: string | null;
+  featured: boolean;
+
+  // Mint details — any of these may be unknown (null), never fabricated.
+  mintPriceEth: number | null;
+  mintCurrency: string | null;
+  mintStart: string | null; // ISO timestamp
+  mintEnd: string | null; // ISO timestamp
+  mintStage: string | null;
+  maxPerWallet: number | null;
+  totalSupply: number | null;
+  /** Derived on the server at fetch time; the client recomputes live. */
+  isLive: boolean;
+
+  /** Optional enrichment from existing scanner data when the collection exists. */
+  scanner?: {
+    floor: number | null;
+    bestBid: number | null;
+    volume24h: number | null;
+    offerToFloorSpread: number | null;
+    score: number | null;
+    hasData: boolean;
+  };
+}

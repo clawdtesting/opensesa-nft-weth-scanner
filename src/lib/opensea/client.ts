@@ -190,6 +190,23 @@ export class OpenSeaClient {
     );
   }
 
+  /**
+   * GET /drops?type=&chains= — OpenSea's drop/mint discovery feed.
+   *
+   * NOTE: this is NOT part of OpenSea's documented public API; it targets the
+   * internal drops feed and may change or be blocked without notice. The
+   * response is returned untyped and parsed defensively by dropsParse.ts, and
+   * callers must treat failure as "unavailable" (never fatal). Ethereum-only is
+   * requested here and re-enforced after parsing.
+   */
+  getDrops(type: string): Promise<unknown> {
+    return this.request<unknown>(
+      '/drops',
+      { type, chains: this.chain },
+      { cacheTtlMs: 60_000 },
+    );
+  }
+
   /** GET /events/collection/{slug} — one page of events (sales/orders). */
   getCollectionEvents(
     slug: string,

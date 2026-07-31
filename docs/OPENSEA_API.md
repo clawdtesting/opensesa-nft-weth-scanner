@@ -88,6 +88,31 @@ prices.
 marketplace fee; all other recipients are summed into the creator royalty (which
 also applies to offer settlement). Falls back to 2.5% marketplace / 0% creator.
 
+## Drops / mint discovery (Ethereum only) — unofficial feed
+
+The **Drops** tab needs upcoming/featured/recently-minted mint data. OpenSea's
+**documented public API has no drops endpoint** — verified against the API
+reference and the `opensea-js` SDK (which mirrors the full public surface). The
+opensea.io/drops carousel is served by OpenSea's *internal* API, which is
+undocumented, not covered by the API key, and may change or be blocked. We treat
+it accordingly:
+
+- `OpenSeaClient.getDrops(type)` requests `/drops?type=&chains=ethereum` and
+  returns the body untyped.
+- `dropsParse.ts` parses it **defensively** (accepts array / `{drops}` /
+  `{collections}`, maps many field-name variants, normalises unix/ISO
+  timestamps) and **enforces Ethereum-only** after the fact. Missing fields
+  become `null` — never fabricated.
+- `services/drops.ts` wraps the call so failure is non-fatal: the tab shows a
+  clean "unavailable" state. **Recently Minted** additionally falls back to the
+  official `GET /collections?order_by=created_date&chain=ethereum`, so it always
+  returns real data, and all cards are enriched from existing `MarketSnapshot`
+  data when the collection is already tracked (no scanner logic duplicated).
+
+If OpenSea's internal shape differs from the defensive mapping, Upcoming/Featured
+will simply show "unavailable" rather than break — adjust the field maps in
+`dropsParse.ts` (or point `getDrops` at a valid endpoint) to activate them.
+
 ## Event deduplication
 
 Sales are stored with a deterministic `eventId` (`saleEventId`): transaction hash

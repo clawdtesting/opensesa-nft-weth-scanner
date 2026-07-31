@@ -62,6 +62,9 @@ npm run backtest -- --days=7  # backtest against stored snapshots
 - **Opportunities** — sortable/filterable terminal table ranked by opportunity
   score; every metric column (spread, ROI, P(fill), P(exit), capital efficiency…)
   is sortable.
+- **Drops / Mints** — Ethereum-only mint discovery with Upcoming / Featured /
+  Recently Minted tabs, live mint countdowns, and scanner-enriched cards. See the
+  drops note in [`docs/OPENSEA_API.md`](docs/OPENSEA_API.md).
 - **Collection detail** — headline metrics, an explainable *"why this ranks"*
   breakdown, risk penalties, score components, and recent sales/listings/offers.
 - **Paper Portfolio** — simulated positions, P&L, win rate, profit-per-WETH-hour.
