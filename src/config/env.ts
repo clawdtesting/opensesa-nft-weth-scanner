@@ -26,6 +26,7 @@ export const env = {
     maxRps: num('OPENSEA_MAX_RPS', 4),
   },
   discoveryLimit: num('DISCOVERY_LIMIT', 60),
+  cronSecret: optional('CRON_SECRET'),
   seedSlugs: optional('SCAN_SEED_SLUGS')
     .split(',')
     .map((s) => s.trim())

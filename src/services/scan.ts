@@ -1,4 +1,5 @@
 import 'server-only';
+import { prisma } from '@/lib/db';
 import { discoverCollections } from './discovery';
 import { ingestCollection } from './ingestion';
 import { buildSnapshot, rerankOpportunities } from './snapshot';
@@ -56,4 +57,53 @@ export async function runScan(opts: { limit?: number; slugs?: string[] } = {}): 
   };
   logger.info('scan.done', { ...result });
   return result;
+}
+
+/**
+ * Rotating scan for a background cron.
+ *
+ * Serverless functions can't scan the whole universe in one request, so each
+ * tick scans the `batchSize` least-recently-updated active collections and then
+ * bumps their `updatedAt` so the next tick picks up the next slice — cycling
+ * through everything over time. Pass `discover: true` (e.g. once a day) to
+ * refresh/expand the universe first; otherwise it just scans what's known.
+ */
+export async function runRotatingScan(opts: {
+  batchSize?: number;
+  discover?: boolean;
+  discoverLimit?: number;
+} = {}): Promise<ScanResult & { batch: string[] }> {
+  const batchSize = opts.batchSize ?? 10;
+
+  if (opts.discover) {
+    await discoverCollections({ limit: opts.discoverLimit });
+  }
+
+  const pick = async () =>
+    (
+      await prisma.collection.findMany({
+        where: { active: true },
+        orderBy: { updatedAt: 'asc' },
+        take: batchSize,
+        select: { slug: true },
+      })
+    ).map((c) => c.slug);
+
+  let slugs = await pick();
+  // Cold start: nothing known yet — discover once, then pick.
+  if (slugs.length === 0) {
+    await discoverCollections({ limit: opts.discoverLimit });
+    slugs = await pick();
+  }
+
+  const result = await runScan({ slugs });
+
+  // Advance the rotation cursor: bumping updatedAt moves these to the back of
+  // the queue so subsequent ticks scan different collections.
+  if (slugs.length > 0) {
+    await prisma.collection.updateMany({ where: { slug: { in: slugs } }, data: { active: true } });
+  }
+
+  logger.info('scan.rotating_done', { batch: slugs.length, discover: Boolean(opts.discover) });
+  return { ...result, batch: slugs };
 }
