@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Opportunity, Collection, MarketSnapshot } from '@prisma/client';
 import { prisma } from '@/lib/db';
 
 export interface OpportunityRow {
@@ -57,42 +58,60 @@ export async function listOpportunities(filters: OpportunityFilters = {}): Promi
         });
     if (!snap) continue;
 
-    const rawSpread =
-      snap.floor && snap.floor > 0 && snap.bestBid !== null
-        ? (snap.floor - snap.bestBid) / snap.floor
-        : null;
-
-    const row: OpportunityRow = {
-      slug: opp.collection.slug,
-      name: opp.collection.name,
-      imageUrl: opp.collection.imageUrl,
-      chain: opp.collection.chain,
-      rank: opp.rank,
-      score: opp.score,
-      passesFilter: opp.passesFilter,
-      floor: snap.floor,
-      realisticExit: snap.realisticExit,
-      bestBid: snap.bestBid,
-      recommendedBid: snap.recommendedBid,
-      rawSpread,
-      expectedProfit: snap.expectedProfit,
-      expectedRoi: snap.expectedRoi,
-      sales1h: snap.sales1h,
-      sales24h: snap.sales24h,
-      acceptedOffers24h: snap.acceptedOffers24h,
-      floorDepth5: snap.floorDepth5,
-      fillProbability: snap.fillProbability,
-      exitProbability24h: snap.exitProbability24h,
-      estimatedHoldingHours: snap.estimatedHoldingHours,
-      capitalEfficiency: snap.capitalEfficiency,
-      reason: opp.reason,
-    };
-
+    const row = toRow(opp, opp.collection, snap);
     if (!matches(row, snap.volume24h, filters)) continue;
     rows.push(row);
   }
 
   return rows;
+}
+
+/** Map an opportunity + its collection + latest snapshot into a dashboard row. */
+function toRow(opp: Opportunity, collection: Collection, snap: MarketSnapshot): OpportunityRow {
+  const rawSpread =
+    snap.floor && snap.floor > 0 && snap.bestBid !== null
+      ? (snap.floor - snap.bestBid) / snap.floor
+      : null;
+  return {
+    slug: collection.slug,
+    name: collection.name,
+    imageUrl: collection.imageUrl,
+    chain: collection.chain,
+    rank: opp.rank,
+    score: opp.score,
+    passesFilter: opp.passesFilter,
+    floor: snap.floor,
+    realisticExit: snap.realisticExit,
+    bestBid: snap.bestBid,
+    recommendedBid: snap.recommendedBid,
+    rawSpread,
+    expectedProfit: snap.expectedProfit,
+    expectedRoi: snap.expectedRoi,
+    sales1h: snap.sales1h,
+    sales24h: snap.sales24h,
+    acceptedOffers24h: snap.acceptedOffers24h,
+    floorDepth5: snap.floorDepth5,
+    fillProbability: snap.fillProbability,
+    exitProbability24h: snap.exitProbability24h,
+    estimatedHoldingHours: snap.estimatedHoldingHours,
+    capitalEfficiency: snap.capitalEfficiency,
+    reason: opp.reason,
+  };
+}
+
+/** Fetch a single up-to-date opportunity row for one collection (post-refresh). */
+export async function getOpportunityRow(slug: string): Promise<OpportunityRow | null> {
+  const collection = await prisma.collection.findUnique({ where: { slug } });
+  if (!collection) return null;
+  const [opp, snap] = await Promise.all([
+    prisma.opportunity.findUnique({ where: { collectionId: collection.id } }),
+    prisma.marketSnapshot.findFirst({
+      where: { collectionId: collection.id },
+      orderBy: { timestamp: 'desc' },
+    }),
+  ]);
+  if (!opp || !snap) return null;
+  return toRow(opp, collection, snap);
 }
 
 function matches(
