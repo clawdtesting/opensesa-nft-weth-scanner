@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ingestCollection } from '@/services/ingestion';
-import { buildSnapshot, rerankOpportunities } from '@/services/snapshot';
+import { buildSnapshot } from '@/services/snapshot';
 import { getOpportunityRow } from '@/services/opportunities';
 import { env } from '@/config/env';
 
@@ -23,7 +23,9 @@ export async function POST(_request: Request, { params }: { params: { slug: stri
   try {
     const { collectionId, sales, listings, offers } = await ingestCollection(slug);
     await buildSnapshot({ collectionId, sales, listings, offers });
-    await rerankOpportunities();
+    // Note: no global rerank here — a single-row refresh only needs this
+    // collection's numbers; ranks are recomputed on the next full scan. This
+    // keeps the endpoint fast enough to avoid serverless (504) timeouts.
     const row = await getOpportunityRow(slug);
     if (!row) return NextResponse.json({ error: 'No data after refresh' }, { status: 404 });
     return NextResponse.json({ row });
