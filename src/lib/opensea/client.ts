@@ -177,11 +177,13 @@ export class OpenSeaClient {
     orderBy?: 'market_cap' | 'seven_day_volume' | 'num_owners' | 'created_date';
     limit?: number;
     next?: string;
+    /** Override the client's default chain (e.g. for the Robinhood feed). */
+    chain?: string;
   } = {}): Promise<OSCollectionsResponse> {
     return this.request<OSCollectionsResponse>(
       '/collections',
       {
-        chain: this.chain,
+        chain: params.chain ?? this.chain,
         order_by: params.orderBy ?? 'seven_day_volume',
         limit: params.limit ?? 100,
         next: params.next,

@@ -25,6 +25,9 @@ export const env = {
     chain: optional('OPENSEA_CHAIN', 'ethereum'),
     maxRps: num('OPENSEA_MAX_RPS', 4),
   },
+  // OpenSea chain identifier for the Robinhood tab. Isolated from the main
+  // scanner chain so the Robinhood feed can target a different network.
+  robinhoodChain: optional('ROBINHOOD_CHAIN', 'robinhood'),
   discoveryLimit: num('DISCOVERY_LIMIT', 60),
   cronSecret: optional('CRON_SECRET'),
   seedSlugs: optional('SCAN_SEED_SLUGS')

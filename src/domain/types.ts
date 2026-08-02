@@ -192,3 +192,32 @@ export interface DropItem {
     hasData: boolean;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Robinhood chain — newly minted collections
+// ---------------------------------------------------------------------------
+
+/**
+ * A newly created collection on the Robinhood chain, enriched with the metrics
+ * the Robinhood tab filters on (holders, item count, 24h/96h volume). Any metric
+ * may be unknown (null) — values are never fabricated.
+ */
+export interface RobinhoodCollection {
+  slug: string;
+  name: string;
+  chain: string;
+  imageUrl: string | null;
+  contract: string | null;
+  openseaUrl: string | null;
+
+  /** Number of unique holders/owners (OpenSea stats `num_owners`). */
+  holders: number | null;
+  /** How many items are in the collection (`total_supply`). */
+  itemCount: number | null;
+  floorEth: number | null;
+  /** Trailing 24h traded volume in ETH (OpenSea `one_day` interval). */
+  volume24hEth: number | null;
+  /** Trailing 96h traded volume in ETH, summed from sale events (best-effort). */
+  volume96hEth: number | null;
+  totalVolumeEth: number | null;
+}
