@@ -181,7 +181,6 @@ export function RobinhoodView() {
                 <th className="num">24h Vol</th>
                 <th className="num">96h Vol</th>
                 <th className="num">Total Vol</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -198,6 +197,17 @@ export function RobinhoodView() {
                       <span className="truncate max-w-[220px]" title={c.name}>
                         {c.name}
                       </span>
+                      {c.openseaUrl && (
+                        <a
+                          href={c.openseaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View on OpenSea"
+                          className="inline-flex leading-none shrink-0"
+                        >
+                          <OpenSeaIcon />
+                        </a>
+                      )}
                     </div>
                   </td>
                   <td className="num">{fmtInt(c.holders)}</td>
@@ -206,19 +216,6 @@ export function RobinhoodView() {
                   <td className="num">{formatEth(c.volume24hEth, 3)}</td>
                   <td className="num">{formatEth(c.volume96hEth, 3)}</td>
                   <td className="num">{formatEth(c.totalVolumeEth, 2)}</td>
-                  <td className="num">
-                    {c.openseaUrl && (
-                      <a
-                        href={c.openseaUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="View on OpenSea"
-                        className="inline-flex leading-none align-middle"
-                      >
-                        <OpenSeaIcon />
-                      </a>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>
