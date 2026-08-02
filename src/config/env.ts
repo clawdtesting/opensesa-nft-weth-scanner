@@ -28,6 +28,11 @@ export const env = {
   // OpenSea chain identifier for the Robinhood tab. Isolated from the main
   // scanner chain so the Robinhood feed can target a different network.
   robinhoodChain: optional('ROBINHOOD_CHAIN', 'robinhood'),
+  // How many newest Robinhood collections to fetch + enrich per refresh.
+  // Higher = more coverage but more OpenSea calls (each collection costs a few),
+  // so keep it within the API route's time budget. Max useful value is 100
+  // (OpenSea's per-page cap for the collections endpoint).
+  robinhoodLimit: num('ROBINHOOD_LIMIT', 50),
   discoveryLimit: num('DISCOVERY_LIMIT', 60),
   cronSecret: optional('CRON_SECRET'),
   seedSlugs: optional('SCAN_SEED_SLUGS')

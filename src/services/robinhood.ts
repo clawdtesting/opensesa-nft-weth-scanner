@@ -13,12 +13,16 @@ export interface RobinhoodResult {
   lastRefreshAt: string | null;
 }
 
-/** How many newest collections to pull + enrich per refresh. */
-const DISCOVERY_LIMIT = 24;
+/** How many newest collections to pull + enrich per refresh (env-configurable). */
+const DISCOVERY_LIMIT = Math.min(env.robinhoodLimit, 100);
 /** Cached results are served instantly until this many ms have elapsed. */
 const CACHE_TTL_MS = 5 * 60_000;
-/** Cap event pagination when summing 96h volume (best-effort, bounds cost). */
-const EVENT_MAX_PAGES = 3;
+/**
+ * Cap event pagination when summing 96h volume (best-effort, bounds cost).
+ * Kept small so a larger DISCOVERY_LIMIT still fits the route's time budget —
+ * brand-new collections rarely have more than one page of sales anyway.
+ */
+const EVENT_MAX_PAGES = 2;
 const HOUR_MS = 3_600_000;
 
 // In-memory cache. Serverless instances are short-lived, so this simply avoids
