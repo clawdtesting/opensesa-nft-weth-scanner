@@ -181,7 +181,6 @@ export function RobinhoodView() {
                 <th className="num">24h Vol</th>
                 <th className="num">96h Vol</th>
                 <th className="num">Total Vol</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -198,6 +197,17 @@ export function RobinhoodView() {
                       <span className="truncate max-w-[220px]" title={c.name}>
                         {c.name}
                       </span>
+                      {c.openseaUrl && (
+                        <a
+                          href={c.openseaUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View on OpenSea"
+                          className="inline-flex leading-none shrink-0"
+                        >
+                          <OpenSeaIcon />
+                        </a>
+                      )}
                     </div>
                   </td>
                   <td className="num">{fmtInt(c.holders)}</td>
@@ -206,18 +216,6 @@ export function RobinhoodView() {
                   <td className="num">{formatEth(c.volume24hEth, 3)}</td>
                   <td className="num">{formatEth(c.volume96hEth, 3)}</td>
                   <td className="num">{formatEth(c.totalVolumeEth, 2)}</td>
-                  <td className="num">
-                    {c.openseaUrl && (
-                      <a
-                        href={c.openseaUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-terminal-muted hover:text-terminal-text underline"
-                      >
-                        ↗
-                      </a>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -250,6 +248,19 @@ function NumberFilter({
         className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-sm text-terminal-text w-full"
       />
     </label>
+  );
+}
+
+function OpenSeaIcon() {
+  // Simplified OpenSea mark: a blue disc with a light sail glyph.
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#2081E2" />
+      <path
+        d="M5 13.2h4.1c.3 0 .5-.2.6-.4.5-1.1 1.6-3.7 1.6-3.7s-.6 2.9-.4 4.1h2.2c.2 0 .4-.1.5-.3l.5-.8H19c0 1.9-2.2 3.9-4.9 3.9H7.4c-1.3 0-2.4-1-2.4-2.8z"
+        fill="#fff"
+      />
+    </svg>
   );
 }
 
