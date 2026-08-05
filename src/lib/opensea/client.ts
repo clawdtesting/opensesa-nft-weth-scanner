@@ -6,6 +6,7 @@ import type {
   OSCollection,
   OSCollectionStats,
   OSCollectionsResponse,
+  OSContract,
   OSEventsResponse,
   OSEvent,
   OSListingsResponse,
@@ -157,6 +158,19 @@ export class OpenSeaClient {
   }
 
   // ---- Endpoint wrappers ------------------------------------------------
+
+  /**
+   * GET /chain/{chain}/contract/{address} — resolve a raw contract address to
+   * its OpenSea collection slug. Short cache: near a drop the collection may not
+   * be indexed yet, so callers re-fetch until it resolves.
+   */
+  getContract(address: string, chain?: string): Promise<OSContract> {
+    return this.request<OSContract>(
+      `/chain/${chain ?? this.chain}/contract/${address}`,
+      undefined,
+      { cacheTtlMs: 30_000 },
+    );
+  }
 
   /** GET /collections/{slug} — metadata + fees (cached; changes slowly). */
   getCollection(slug: string): Promise<OSCollection> {

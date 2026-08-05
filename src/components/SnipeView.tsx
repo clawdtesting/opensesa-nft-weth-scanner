@@ -1,0 +1,193 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { SnipeTarget } from '@/domain/types';
+import { formatEth } from '@/lib/money';
+
+// OpenSea chain identifiers the sniper can target.
+const CHAINS = [
+  'ethereum',
+  'base',
+  'arbitrum',
+  'optimism',
+  'polygon',
+  'robinhood',
+  'blast',
+  'zora',
+  'sei',
+];
+
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+export function SnipeView() {
+  const [contract, setContract] = useState('');
+  const [chain, setChain] = useState('ethereum');
+  const [target, setTarget] = useState<SnipeTarget | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [auto, setAuto] = useState(false);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const valid = ADDRESS_RE.test(contract.trim());
+
+  const fetchTarget = useCallback(
+    async (silent = false) => {
+      if (!ADDRESS_RE.test(contract.trim())) {
+        setError('Enter a valid contract address (0x + 40 hex chars).');
+        return;
+      }
+      if (!silent) setLoading(true);
+      setError('');
+      try {
+        const res = await fetch(
+          `/api/snipe?contract=${encodeURIComponent(contract.trim())}&chain=${encodeURIComponent(chain)}`,
+        );
+        const body = (await res.json()) as SnipeTarget & { error?: string };
+        if (!res.ok) throw new Error(body?.error ?? `Fetch failed (HTTP ${res.status}).`);
+        setTarget(body);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Fetch failed');
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [contract, chain],
+  );
+
+  // Auto-refetch every 10s while armed (useful right at drop time).
+  useEffect(() => {
+    if (timer.current) clearInterval(timer.current);
+    if (auto && valid) {
+      timer.current = setInterval(() => fetchTarget(true), 10_000);
+    }
+    return () => {
+      if (timer.current) clearInterval(timer.current);
+    };
+  }, [auto, valid, fetchTarget]);
+
+  return (
+    <div className="max-w-3xl">
+      {/* Input */}
+      <div className="border border-terminal-border rounded bg-terminal-panel p-4 mb-4">
+        <label className="block text-[10px] uppercase tracking-wide text-terminal-muted mb-1">
+          Collection contract address
+        </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={contract}
+            onChange={(e) => setContract(e.target.value)}
+            placeholder="0x…"
+            spellCheck={false}
+            className="flex-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm text-terminal-text font-mono"
+          />
+          <select
+            value={chain}
+            onChange={(e) => setChain(e.target.value)}
+            className="bg-terminal-bg border border-terminal-border rounded px-2 py-2 text-sm text-terminal-text"
+          >
+            {CHAINS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => fetchTarget(false)}
+            disabled={loading || !valid}
+            className="border border-terminal-accent text-terminal-accent rounded px-4 py-2 text-sm hover:bg-terminal-accent/10 disabled:opacity-40"
+          >
+            {loading ? 'Fetching…' : 'Fetch'}
+          </button>
+        </div>
+        <div className="flex items-center gap-3 mt-2 text-[11px] text-terminal-muted">
+          {contract.trim() !== '' && !valid && <span className="neg">Not a valid 0x address</span>}
+          <label className="ml-auto flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+            Auto-refetch every 10s
+          </label>
+        </div>
+      </div>
+
+      {error && <p className="text-sm neg mb-3">{error}</p>}
+
+      {/* Result */}
+      {target && (
+        <div className="border border-terminal-border rounded bg-terminal-panel overflow-hidden">
+          <div className="flex items-center gap-3 p-4 border-b border-terminal-border">
+            {target.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={target.imageUrl} alt="" className="w-12 h-12 rounded object-cover bg-terminal-bg" />
+            ) : (
+              <div className="w-12 h-12 rounded bg-terminal-bg" />
+            )}
+            <div className="min-w-0">
+              <div className="text-sm text-terminal-text truncate">{target.name ?? target.slug ?? 'Unknown collection'}</div>
+              <div className="text-[11px] text-terminal-muted truncate font-mono">{target.contract}</div>
+            </div>
+            <span className="ml-auto text-[10px] uppercase tracking-wide border border-terminal-border rounded px-1.5 py-0.5 text-terminal-muted">
+              {target.chain}
+            </span>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 p-4 text-sm border-b border-terminal-border">
+            <Row label="Floor" value={target.floorEth !== null ? `${formatEth(target.floorEth)} ${target.bestListing?.currency ?? 'ETH'}` : '—'} />
+            <Row label="Collection" value={target.slug ?? '—'} />
+            <Row label="Best order" value={target.bestListing ? short(target.bestListing.orderHash) : '—'} />
+            <Row label="Token id" value={target.bestListing?.tokenId ?? '—'} />
+            <Row
+              label="Executor"
+              value={target.executorReady ? 'ready (PRIVATE_KEY + RPC set)' : 'not configured'}
+              valueClass={target.executorReady ? 'pos' : 'neg'}
+            />
+            <Row label="Fetched" value={fmtTime(target.fetchedAt)} />
+          </dl>
+
+          {target.note && (
+            <p className="px-4 py-2 text-[11px] text-terminal-amber border-b border-terminal-border">{target.note}</p>
+          )}
+
+          <div className="flex items-center gap-3 p-4">
+            <button
+              disabled
+              title="On-chain execution ships in the next iteration"
+              className="border border-terminal-border text-terminal-muted rounded px-4 py-2 text-sm cursor-not-allowed opacity-60"
+            >
+              ⚡ Buy floor (next iteration)
+            </button>
+            {target.openseaUrl && (
+              <a
+                href={target.openseaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto text-xs text-terminal-muted hover:text-terminal-text underline"
+              >
+                View on OpenSea ↗
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex justify-between gap-3 min-w-0">
+      <dt className="text-terminal-muted shrink-0">{label}</dt>
+      <dd className={`text-terminal-text truncate font-mono ${valueClass ?? ''}`} title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function short(s: string): string {
+  return s.length > 14 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s;
+}
+
+function fmtTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  return new Date(t).toISOString().slice(11, 19) + 'Z';
+}

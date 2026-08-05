@@ -41,6 +41,16 @@ export interface OSCollectionsResponse {
   next?: string | null;
 }
 
+/** GET /chain/{chain}/contract/{address} — resolves a contract to its collection. */
+export interface OSContract {
+  address: string;
+  chain: string;
+  collection?: string; // slug
+  contract_standard?: string; // e.g. "erc721"
+  name?: string;
+  total_supply?: number;
+}
+
 export interface OSStatsInterval {
   interval: 'one_day' | 'seven_day' | 'thirty_day';
   volume: number;

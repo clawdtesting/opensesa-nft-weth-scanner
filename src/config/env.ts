@@ -35,6 +35,14 @@ export const env = {
   robinhoodLimit: num('ROBINHOOD_LIMIT', 50),
   discoveryLimit: num('DISCOVERY_LIMIT', 60),
   cronSecret: optional('CRON_SECRET'),
+  // Buyer / one-click floor purchase (server-only secrets — NEVER expose these
+  // to the client or serialize them in any API response). PRIVATE_KEY signs the
+  // fulfillment transaction; RPC_URL is the node the signed tx is broadcast to.
+  // Both are only needed for on-chain execution, not for fetching a collection.
+  buyer: {
+    privateKey: optional('PRIVATE_KEY'),
+    rpcUrl: optional('RPC_URL'),
+  },
   seedSlugs: optional('SCAN_SEED_SLUGS')
     .split(',')
     .map((s) => s.trim())
@@ -48,4 +56,9 @@ export function assertOpenseaConfigured(): void {
       'OPENSEA_API_KEY is not set. Live ingestion requires an OpenSea API key (server-side only).',
     );
   }
+}
+
+/** True when the wallet credentials required to execute an on-chain buy exist. */
+export function buyerReady(): boolean {
+  return Boolean(env.buyer.privateKey && env.buyer.rpcUrl);
 }

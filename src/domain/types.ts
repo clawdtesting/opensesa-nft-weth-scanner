@@ -221,3 +221,39 @@ export interface RobinhoodCollection {
   volume96hEth: number | null;
   totalVolumeEth: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Floor sniper — fetch a specific collection by contract address, then buy
+// ---------------------------------------------------------------------------
+
+/** The cheapest active listing (the floor), with the data needed to fulfill it. */
+export interface FloorListing {
+  /** OpenSea order hash — the handle used to request fulfillment data. */
+  orderHash: string;
+  /** Per-item price in ETH. */
+  priceEth: number;
+  currency: string;
+  /** Seaport protocol contract the order was created against. */
+  protocolAddress: string | null;
+  /** Specific token id being sold, when the listing is for a single NFT. */
+  tokenId: string | null;
+}
+
+/**
+ * A collection resolved from a pasted contract address, with its live floor.
+ * Any field may be null before the drop is indexed/listed on OpenSea.
+ */
+export interface SnipeTarget {
+  chain: string;
+  contract: string;
+  slug: string | null;
+  name: string | null;
+  imageUrl: string | null;
+  openseaUrl: string | null;
+  floorEth: number | null;
+  bestListing: FloorListing | null;
+  /** True when server wallet credentials (PRIVATE_KEY + RPC_URL) are configured. */
+  executorReady: boolean;
+  fetchedAt: string; // ISO timestamp
+  note?: string;
+}
