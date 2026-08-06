@@ -62,8 +62,9 @@ export function SnipeView() {
   );
 
   const fetchTarget = useCallback(
-    async (silent = false) => {
-      if (!ADDRESS_RE.test(contract.trim())) {
+    async (silent = false, contractOverride?: string) => {
+      const addr = (contractOverride ?? contract).trim();
+      if (!ADDRESS_RE.test(addr)) {
         setError('Enter a valid contract address (0x + 40 hex chars).');
         return;
       }
@@ -71,7 +72,7 @@ export function SnipeView() {
       setError('');
       try {
         const res = await fetch(
-          `/api/snipe?contract=${encodeURIComponent(contract.trim())}&chain=${encodeURIComponent(chain)}`,
+          `/api/snipe?contract=${encodeURIComponent(addr)}&chain=${encodeURIComponent(chain)}`,
         );
         const body = (await res.json()) as SnipeTarget & { error?: string };
         if (!res.ok) throw new Error(body?.error ?? `Fetch failed (HTTP ${res.status}).`);
@@ -95,6 +96,18 @@ export function SnipeView() {
       if (timer.current) clearInterval(timer.current);
     };
   }, [auto, valid, fetchTarget]);
+
+  // "Use" from the discovery panel loads a collection here and fetches it.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const addr = (e as CustomEvent<string>).detail;
+      if (!addr) return;
+      setContract(addr);
+      void fetchTarget(false, addr);
+    };
+    window.addEventListener('nftbuy:use-collection', handler);
+    return () => window.removeEventListener('nftbuy:use-collection', handler);
+  }, [fetchTarget]);
 
   return (
     <div className="max-w-3xl">

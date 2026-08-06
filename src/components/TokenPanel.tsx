@@ -43,15 +43,16 @@ export function TokenPanel() {
 
   const valid = ADDRESS_RE.test(address.trim());
 
-  const fetchInfo = useCallback(async () => {
-    if (!ADDRESS_RE.test(address.trim())) {
+  const fetchInfo = useCallback(async (addressOverride?: string) => {
+    const addr = (addressOverride ?? address).trim();
+    if (!ADDRESS_RE.test(addr)) {
       setError('Enter a valid token contract address (0x + 40 hex chars).');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/token?address=${encodeURIComponent(address.trim())}`);
+      const res = await fetch(`/api/token?address=${encodeURIComponent(addr)}`);
       const body = (await res.json()) as TokenInfo & { error?: string };
       if (!res.ok) throw new Error(body?.error ?? `Fetch failed (HTTP ${res.status}).`);
       setInfo(body);
@@ -63,6 +64,18 @@ export function TokenPanel() {
       setLoading(false);
     }
   }, [address]);
+
+  // "Use" from the discovery panel loads a token here and fetches it.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const addr = (e as CustomEvent<string>).detail;
+      if (!addr) return;
+      setAddress(addr);
+      void fetchInfo(addr);
+    };
+    window.addEventListener('nftbuy:use-token', handler);
+    return () => window.removeEventListener('nftbuy:use-token', handler);
+  }, [fetchInfo]);
 
   // Live price sampling while armed.
   const armedRef = useRef(armed);
@@ -124,7 +137,7 @@ export function TokenPanel() {
           className="flex-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm text-terminal-text font-mono"
         />
         <button
-          onClick={fetchInfo}
+          onClick={() => fetchInfo()}
           disabled={loading || !valid}
           className="border border-terminal-accent text-terminal-accent rounded px-4 py-2 text-sm hover:bg-terminal-accent/10 disabled:opacity-40"
         >

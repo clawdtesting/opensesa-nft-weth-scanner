@@ -223,6 +223,31 @@ export interface RobinhoodCollection {
 }
 
 // ---------------------------------------------------------------------------
+// Chain discovery — newly-minting NFT & token contracts on Robinhood chain
+// ---------------------------------------------------------------------------
+
+export type ContractKind = 'ERC-20' | 'ERC-721' | 'ERC-1155' | 'unknown';
+
+/** A contract seen minting in the recent block window. */
+export interface DiscoveredContract {
+  address: string;
+  kind: ContractKind;
+  name: string | null;
+  symbol: string | null;
+  decimals: number | null;
+  /** Most recent block in which we saw a mint from this contract. */
+  lastBlock: number;
+}
+
+export interface ChainScanResult {
+  contracts: DiscoveredContract[];
+  fromBlock: number;
+  toBlock: number;
+  scannedAt: string; // ISO
+  note?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Floor sniper — fetch a specific collection by contract address, then buy
 // ---------------------------------------------------------------------------
 

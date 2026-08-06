@@ -1,3 +1,4 @@
+import { ChainDiscovery } from '@/components/ChainDiscovery';
 import { SnipeView } from '@/components/SnipeView';
 import { TokenPanel } from '@/components/TokenPanel';
 import { WalletBalances } from '@/components/WalletBalances';
@@ -20,6 +21,8 @@ export default function BuyPage() {
       <div className="max-w-3xl">
         <WalletBalances />
       </div>
+
+      <ChainDiscovery />
 
       <SnipeView />
       <TokenPanel />
