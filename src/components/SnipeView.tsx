@@ -310,5 +310,6 @@ function short(s: string): string {
 function fmtTime(iso: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return '—';
-  return new Date(t).toISOString().slice(11, 19) + 'Z';
+  // Local browser time (Montreal / Eastern for this user), with the tz label.
+  return new Date(t).toLocaleTimeString([], { hour12: false, timeZoneName: 'short' });
 }
