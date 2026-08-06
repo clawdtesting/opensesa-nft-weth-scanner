@@ -42,9 +42,9 @@ export const env = {
   buyer: {
     privateKey: optional('PRIVATE_KEY'),
     rpcUrl: optional('RPC_URL'),
-    // Wrapped-ETH ERC-20 address on the target chain, used to read the WETH
-    // balance. Chain-specific, so it is configured rather than hard-coded.
-    wethAddress: optional('WETH_ADDRESS'),
+    // Wrapped-ETH ERC-20 address, used to read the WETH balance. Defaults to
+    // WETH on Robinhood chain; override via env for other chains.
+    wethAddress: optional('WETH_ADDRESS', '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73'),
   },
   seedSlugs: optional('SCAN_SEED_SLUGS')
     .split(',')

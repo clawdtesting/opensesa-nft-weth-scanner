@@ -24,7 +24,7 @@ export interface TokenPrice {
 export async function getTokenInfo(addressRaw: string): Promise<TokenInfo> {
   const address = addressRaw.trim();
   const fetchedAt = new Date().toISOString();
-  if (!isAddress(address)) {
+  if (!isAddress(address.toLowerCase())) {
     return { address, symbol: null, decimals: null, balance: null, fetchedAt, note: 'Enter a valid token contract address.' };
   }
 
@@ -53,7 +53,7 @@ export async function getTokenInfo(addressRaw: string): Promise<TokenInfo> {
 export async function getTokenPrice(addressRaw: string): Promise<TokenPrice> {
   const address = addressRaw.trim();
   const at = new Date().toISOString();
-  if (!isAddress(address)) {
+  if (!isAddress(address.toLowerCase())) {
     return { address, priceEth: null, at, note: 'Invalid token address.' };
   }
 

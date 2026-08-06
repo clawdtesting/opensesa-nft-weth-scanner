@@ -42,10 +42,11 @@ export async function getTokenBalance(
   token: string,
   owner: `0x${string}`,
 ): Promise<number | null> {
-  if (!isAddress(token)) return null;
+  const norm = token.toLowerCase();
+  if (!isAddress(norm)) return null;
   try {
     const client = getPublicClient();
-    const address = getAddress(token);
+    const address = getAddress(norm);
     const [raw, decimals] = await Promise.all([
       client.readContract({ address, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] }),
       client.readContract({ address, abi: ERC20_ABI, functionName: 'decimals' }),
@@ -60,10 +61,11 @@ export async function getTokenBalance(
 export async function getTokenMeta(
   token: string,
 ): Promise<{ symbol: string | null; decimals: number | null }> {
-  if (!isAddress(token)) return { symbol: null, decimals: null };
+  const norm = token.toLowerCase();
+  if (!isAddress(norm)) return { symbol: null, decimals: null };
   try {
     const client = getPublicClient();
-    const address = getAddress(token);
+    const address = getAddress(norm);
     const [symbol, decimals] = await Promise.all([
       client.readContract({ address, abi: ERC20_ABI, functionName: 'symbol' }),
       client.readContract({ address, abi: ERC20_ABI, functionName: 'decimals' }),
