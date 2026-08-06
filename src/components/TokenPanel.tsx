@@ -16,6 +16,25 @@ interface Sample {
   price: number; // ETH per token
 }
 
+interface Activity {
+  address: string;
+  hasCode: boolean;
+  deploymentBlock: number | null;
+  deployedAt: string | null;
+  tradingStarted: boolean;
+  firstTransferBlock: number | null;
+  firstTransferAt: string | null;
+  lastTransferBlock: number | null;
+  lastTransferAt: string | null;
+  transferCount: number;
+  capped: boolean;
+  toBlock: number;
+  scannedFrom: number;
+  fetchedAt: string;
+  note?: string;
+}
+const ACTIVITY_MS = 5_000; // poll trading activity every 5s
+
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 const TIMEFRAMES = [
@@ -40,6 +59,9 @@ export function TokenPanel() {
   const [priceNote, setPriceNote] = useState('');
   const [buyAmt, setBuyAmt] = useState('');
   const [sellAmt, setSellAmt] = useState('');
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const [delta, setDelta] = useState(0);
+  const prevCount = useRef<number | null>(null);
 
   const valid = ADDRESS_RE.test(address.trim());
 
@@ -56,8 +78,11 @@ export function TokenPanel() {
       const body = (await res.json()) as TokenInfo & { error?: string };
       if (!res.ok) throw new Error(body?.error ?? `Fetch failed (HTTP ${res.status}).`);
       setInfo(body);
-      setArmed(true); // start sampling the price feed
+      setArmed(true); // start sampling price + activity
       setSamples([]);
+      setActivity(null);
+      setDelta(0);
+      prevCount.current = null;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fetch failed');
     } finally {
@@ -76,6 +101,30 @@ export function TokenPanel() {
     window.addEventListener('nftbuy:use-token', handler);
     return () => window.removeEventListener('nftbuy:use-token', handler);
   }, [fetchInfo]);
+
+  // Live trading-activity polling while armed.
+  useEffect(() => {
+    if (!armed || !valid) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/token/activity?address=${encodeURIComponent(address.trim())}`);
+        const body = (await res.json()) as Activity;
+        if (cancelled || !res.ok) return;
+        setActivity(body);
+        if (prevCount.current !== null) setDelta(body.transferCount - prevCount.current);
+        prevCount.current = body.transferCount;
+      } catch {
+        /* transient */
+      }
+    };
+    void tick();
+    const id = setInterval(tick, ACTIVITY_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [armed, valid, address]);
 
   // Live price sampling while armed.
   const armedRef = useRef(armed);
@@ -166,6 +215,45 @@ export function TokenPanel() {
           </div>
           {info.note && <p className="text-[11px] text-terminal-amber mt-1">{info.note}</p>}
 
+          {/* Trading activity — is it live + transaction count */}
+          <div className="mt-3 border border-terminal-border rounded p-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-sm font-semibold ${
+                  activity?.tradingStarted ? 'pos' : activity?.hasCode ? 'text-terminal-amber' : 'text-terminal-muted'
+                }`}
+              >
+                {!activity
+                  ? 'Checking…'
+                  : activity.tradingStarted
+                    ? '🟢 TRADING LIVE'
+                    : activity.hasCode
+                      ? '🟡 Deployed · not trading yet'
+                      : '⚪ Not deployed yet'}
+              </span>
+              {delta > 0 && <span className="text-[11px] pos">+{delta} new</span>}
+              <span className="ml-auto text-[11px] text-terminal-muted">
+                every {ACTIVITY_MS / 1000}s{activity ? ` · ${fmtClock(activity.fetchedAt)}` : ''}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs">
+              <Stat label="Transfers" value={activity ? `${activity.transferCount}${activity.capped ? '+' : ''}` : '—'} />
+              <Stat label="Started trading" value={activity?.firstTransferAt ? fmtStamp(activity.firstTransferAt) : '—'} />
+              <Stat label="Last tx" value={activity?.lastTransferAt ? fmtClock(activity.lastTransferAt) : '—'} />
+              <Stat
+                label="Deployed"
+                value={
+                  activity?.deployedAt
+                    ? fmtStamp(activity.deployedAt)
+                    : activity?.deploymentBlock != null
+                      ? `blk ${activity.deploymentBlock.toLocaleString()}`
+                      : '—'
+                }
+              />
+            </div>
+            {activity?.note && <p className="text-[11px] text-terminal-amber mt-1">{activity.note}</p>}
+          </div>
+
           {/* Timeframe selector */}
           <div className="flex items-center gap-1.5 mt-3">
             {TIMEFRAMES.map((t) => (
@@ -245,6 +333,29 @@ export function TokenPanel() {
       )}
     </div>
   );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] uppercase tracking-wide text-terminal-muted">{label}</span>
+      <span className="font-mono text-terminal-text">{value}</span>
+    </div>
+  );
+}
+
+/** Local HH:MM:SS. */
+function fmtClock(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  return new Date(t).toLocaleTimeString([], { hour12: false });
+}
+
+/** Local short date + time, e.g. "Aug 6, 18:00:05". */
+function fmtStamp(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  return new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
 /** Minimal inline-SVG line chart of price over the selected window. */
