@@ -42,6 +42,9 @@ export const env = {
   buyer: {
     privateKey: optional('PRIVATE_KEY'),
     rpcUrl: optional('RPC_URL'),
+    // Wrapped-ETH ERC-20 address on the target chain, used to read the WETH
+    // balance. Chain-specific, so it is configured rather than hard-coded.
+    wethAddress: optional('WETH_ADDRESS'),
   },
   seedSlugs: optional('SCAN_SEED_SLUGS')
     .split(',')

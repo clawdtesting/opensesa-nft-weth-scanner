@@ -4,14 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SnipeTarget } from '@/domain/types';
 import { formatEth, formatPct } from '@/lib/money';
 
-// OpenSea chain identifiers the sniper can target.
+// OpenSea chain identifiers the sniper can target (Robinhood first / default).
 const CHAINS = [
+  'robinhood',
   'ethereum',
   'base',
   'arbitrum',
   'optimism',
   'polygon',
-  'robinhood',
   'blast',
   'zora',
   'sei',
@@ -21,7 +21,7 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 export function SnipeView() {
   const [contract, setContract] = useState('');
-  const [chain, setChain] = useState('ethereum');
+  const [chain, setChain] = useState('robinhood');
   const [target, setTarget] = useState<SnipeTarget | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
