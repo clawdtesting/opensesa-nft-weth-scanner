@@ -12,7 +12,7 @@ export const maxDuration = 60;
  * Requires PRIVATE_KEY + RPC_URL. Never returns wallet secrets.
  */
 export async function POST(request: Request) {
-  let body: { contract?: string; chain?: string; maxPriceEth?: number };
+  let body: { contract?: string; chain?: string; maxPriceEth?: number; orderHash?: string };
   try {
     body = await request.json();
   } catch {
@@ -27,8 +27,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid contract address.' }, { status: 400 });
   }
 
+  const orderHash = typeof body.orderHash === 'string' ? body.orderHash : undefined;
+
   try {
-    const result = await executeFloorBuy(contract, chain, maxPriceEth);
+    const result = await executeFloorBuy(contract, chain, maxPriceEth, orderHash);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (err) {
     return NextResponse.json(

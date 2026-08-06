@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { Seaport } from '@opensea/seaport-js';
 import type { OrderWithCounter } from '@opensea/seaport-js/lib/types';
 import { getOpenSeaClient } from '@/lib/opensea/client';
+import { parseListing } from '@/lib/opensea/parse';
 import { env, buyerReady } from '@/config/env';
 import { robinhoodChain } from '@/lib/chain/robinhood';
 import { logger } from '@/lib/logger';
@@ -34,6 +35,7 @@ export async function executeFloorBuy(
   contract: string,
   chain: string,
   maxPriceEth: number,
+  orderHash?: string,
 ): Promise<BuyResult> {
   if (!buyerReady()) {
     return { ok: false, error: 'Wallet not configured — set PRIVATE_KEY and RPC_URL.' };
@@ -56,8 +58,18 @@ export async function executeFloorBuy(
 
   let listing;
   try {
-    const res = await client.getBestListings(slug, { limit: 1 });
-    listing = res.listings?.[0];
+    const res = await client.getBestListings(slug, { limit: 10 });
+    const listings = res.listings ?? [];
+    if (orderHash) {
+      // Buy the specific listing the user picked (must still be live).
+      listing = listings.find((l) => l.order_hash === orderHash);
+      if (!listing) {
+        return { ok: false, slug, error: 'That listing is no longer among the cheapest — refetch and try again.' };
+      }
+    } else {
+      // Default: the cheapest.
+      listing = [...listings].sort((a, b) => (parseListing(a)?.priceEth ?? Infinity) - (parseListing(b)?.priceEth ?? Infinity))[0];
+    }
   } catch (err) {
     return { ok: false, slug, error: `Could not load floor listing: ${errMsg(err)}` };
   }

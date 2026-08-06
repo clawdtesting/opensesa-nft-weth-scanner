@@ -25,6 +25,7 @@ export async function fetchTarget(contractRaw: string, chain: string): Promise<S
     openseaUrl: null,
     floorEth: null,
     bestListing: null,
+    floorListings: [],
     bestOfferEth: null,
     executorReady: buyerReady(),
     fetchedAt: new Date().toISOString(),
@@ -65,22 +66,28 @@ export async function fetchTarget(contractRaw: string, chain: string): Promise<S
     logger.warn('snipe.collection_meta_failed', { slug, error: String(err) });
   }
 
-  // 3) Cheapest active listing = the floor.
+  // 3) Cheapest active listings = the floor (top 10, ascending by price).
   try {
-    const res = await client.getBestListings(slug, { limit: 1 });
-    const listing = res.listings?.[0];
-    if (listing) {
-      const parsed = parseListing(listing);
-      const best: FloorListing = {
-        orderHash: listing.order_hash,
-        priceEth: parsed?.priceEth ?? 0,
-        currency: parsed?.currency ?? 'ETH',
-        protocolAddress: listing.protocol_address ?? null,
-        tokenId: parsed?.tokenId ?? null,
-      };
-      base.bestListing = best;
-      base.floorEth = best.priceEth || null;
-    } else {
+    const res = await client.getBestListings(slug, { limit: 10 });
+    const parsed = (res.listings ?? [])
+      .map((l): FloorListing | null => {
+        const p = parseListing(l);
+        if (!p) return null;
+        return {
+          orderHash: l.order_hash,
+          priceEth: p.priceEth,
+          currency: p.currency,
+          protocolAddress: l.protocol_address ?? null,
+          tokenId: p.tokenId ?? null,
+        };
+      })
+      .filter((x): x is FloorListing => x !== null)
+      .sort((a, b) => a.priceEth - b.priceEth);
+
+    base.floorListings = parsed;
+    base.bestListing = parsed[0] ?? null;
+    base.floorEth = parsed[0]?.priceEth ?? null;
+    if (parsed.length === 0) {
       base.note = 'Collection found — no active listings yet. Floor appears once someone lists.';
     }
   } catch (err) {

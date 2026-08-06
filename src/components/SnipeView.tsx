@@ -27,34 +27,39 @@ export function SnipeView() {
   const [error, setError] = useState('');
   const [auto, setAuto] = useState(false);
   const [maxPrice, setMaxPrice] = useState('');
-  const [buying, setBuying] = useState(false);
+  // Which listing is currently being bought: an order hash, '__floor__' for the
+  // main button, or null when idle.
+  const [buyingHash, setBuyingHash] = useState<string | null>(null);
   const [buyResult, setBuyResult] = useState<BuyResult | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const valid = ADDRESS_RE.test(contract.trim());
 
-  const buyFloor = useCallback(async () => {
-    const cap = Number(maxPrice);
-    if (!Number.isFinite(cap) || cap <= 0) {
-      setBuyResult({ ok: false, error: 'Set a max price (ETH) before buying.' });
-      return;
-    }
-    setBuying(true);
-    setBuyResult(null);
-    try {
-      const res = await fetch('/api/snipe/buy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contract: contract.trim(), chain, maxPriceEth: cap }),
-      });
-      const body = (await res.json()) as BuyResult;
-      setBuyResult(body);
-    } catch (err) {
-      setBuyResult({ ok: false, error: err instanceof Error ? err.message : 'Buy request failed' });
-    } finally {
-      setBuying(false);
-    }
-  }, [maxPrice, contract, chain]);
+  const buyFloor = useCallback(
+    async (orderHash?: string) => {
+      const cap = Number(maxPrice);
+      if (!Number.isFinite(cap) || cap <= 0) {
+        setBuyResult({ ok: false, error: 'Set a max price (ETH) before buying.' });
+        return;
+      }
+      setBuyingHash(orderHash ?? '__floor__');
+      setBuyResult(null);
+      try {
+        const res = await fetch('/api/snipe/buy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contract: contract.trim(), chain, maxPriceEth: cap, orderHash }),
+        });
+        const body = (await res.json()) as BuyResult;
+        setBuyResult(body);
+      } catch (err) {
+        setBuyResult({ ok: false, error: err instanceof Error ? err.message : 'Buy request failed' });
+      } finally {
+        setBuyingHash(null);
+      }
+    },
+    [maxPrice, contract, chain],
+  );
 
   const fetchTarget = useCallback(
     async (silent = false) => {
@@ -159,8 +164,6 @@ export function SnipeView() {
 
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 p-4 text-sm border-b border-terminal-border">
             <Row label="Collection" value={target.slug ?? '—'} />
-            <Row label="Best order" value={target.bestListing ? short(target.bestListing.orderHash) : '—'} />
-            <Row label="Token id" value={target.bestListing?.tokenId ?? '—'} />
             <Row
               label="Executor"
               value={target.executorReady ? 'ready (PRIVATE_KEY + RPC set)' : 'not configured'}
@@ -171,6 +174,34 @@ export function SnipeView() {
 
           {target.note && (
             <p className="px-4 py-2 text-[11px] text-terminal-amber border-b border-terminal-border">{target.note}</p>
+          )}
+
+          {/* 10 cheapest listings — buy any one directly. */}
+          {target.floorListings.length > 0 && (
+            <div className="border-b border-terminal-border">
+              <div className="flex items-center px-4 pt-3 pb-1 text-[10px] uppercase tracking-wide text-terminal-muted">
+                <span className="w-8">#</span>
+                <span className="w-32">Price</span>
+                <span>Token</span>
+              </div>
+              <ul className="px-2 pb-2">
+                {target.floorListings.map((l, i) => (
+                  <li key={l.orderHash} className="flex items-center px-2 py-1 text-sm rounded hover:bg-terminal-bg/50">
+                    <span className="w-8 text-terminal-muted">{i + 1}</span>
+                    <span className="w-32 font-mono text-terminal-text">Ξ {fmtPrice(l.priceEth)}</span>
+                    <span className="text-[11px] text-terminal-muted">#{l.tokenId ?? '—'}</span>
+                    <button
+                      onClick={() => buyFloor(l.orderHash)}
+                      disabled={!target.executorReady || buyingHash !== null}
+                      title={target.executorReady ? 'Buy this listing' : 'Set PRIVATE_KEY + RPC_URL to enable buying'}
+                      className="ml-auto text-xs border border-terminal-green/60 text-terminal-green rounded px-2.5 py-1 hover:bg-terminal-green/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {buyingHash === l.orderHash ? 'Buying…' : 'Buy'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <div className="p-4">
@@ -188,18 +219,18 @@ export function SnipeView() {
                 />
               </div>
               <button
-                onClick={buyFloor}
-                disabled={!target.executorReady || !target.bestListing || buying}
+                onClick={() => buyFloor()}
+                disabled={!target.executorReady || !target.bestListing || buyingHash !== null}
                 title={
                   !target.executorReady
                     ? 'Set PRIVATE_KEY + RPC_URL to enable buying'
                     : !target.bestListing
                       ? 'No floor listing to buy yet'
-                      : 'Buy the floor now'
+                      : 'Buy the cheapest now'
                 }
                 className="border border-terminal-green text-terminal-green rounded px-4 py-2 text-sm hover:bg-terminal-green/10 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {buying ? 'Buying…' : '⚡ Buy floor now'}
+                {buyingHash === '__floor__' ? 'Buying…' : '⚡ Buy cheapest now'}
               </button>
               {target.openseaUrl && (
                 <a
@@ -297,10 +328,6 @@ function Row({ label, value, valueClass }: { label: string; value: string; value
       </dd>
     </div>
   );
-}
-
-function short(s: string): string {
-  return s.length > 14 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s;
 }
 
 /**
