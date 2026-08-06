@@ -26,9 +26,39 @@ export function SnipeView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [auto, setAuto] = useState(false);
+  const [maxPrice, setMaxPrice] = useState('');
+  const [buying, setBuying] = useState(false);
+  const [buyResult, setBuyResult] = useState<BuyResult | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const valid = ADDRESS_RE.test(contract.trim());
+
+  const buyFloor = useCallback(async () => {
+    const cap = Number(maxPrice);
+    if (!Number.isFinite(cap) || cap <= 0) {
+      setBuyResult({ ok: false, error: 'Set a max price (ETH) before buying.' });
+      return;
+    }
+    const floorTxt = target?.floorEth !== null && target?.floorEth !== undefined ? `${target.floorEth} ETH` : 'unknown';
+    if (!window.confirm(`Buy the floor of ${target?.name ?? contract} for up to ${cap} ETH?\nCurrent floor: ${floorTxt}.\nThis spends real funds.`)) {
+      return;
+    }
+    setBuying(true);
+    setBuyResult(null);
+    try {
+      const res = await fetch('/api/snipe/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contract: contract.trim(), chain, maxPriceEth: cap }),
+      });
+      const body = (await res.json()) as BuyResult;
+      setBuyResult(body);
+    } catch (err) {
+      setBuyResult({ ok: false, error: err instanceof Error ? err.message : 'Buy request failed' });
+    } finally {
+      setBuying(false);
+    }
+  }, [maxPrice, target, contract, chain]);
 
   const fetchTarget = useCallback(
     async (silent = false) => {
@@ -147,29 +177,88 @@ export function SnipeView() {
             <p className="px-4 py-2 text-[11px] text-terminal-amber border-b border-terminal-border">{target.note}</p>
           )}
 
-          <div className="flex items-center gap-3 p-4">
-            <button
-              disabled
-              title="On-chain execution ships in the next iteration"
-              className="border border-terminal-border text-terminal-muted rounded px-4 py-2 text-sm cursor-not-allowed opacity-60"
-            >
-              ⚡ Buy floor (next iteration)
-            </button>
-            {target.openseaUrl && (
-              <a
-                href={target.openseaUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-auto text-xs text-terminal-muted hover:text-terminal-text underline"
+          <div className="p-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-terminal-muted">Max</span>
+                <input
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  placeholder="ETH cap"
+                  className="w-28 bg-terminal-bg border border-terminal-border rounded px-2 py-2 text-sm text-terminal-text"
+                />
+              </div>
+              <button
+                onClick={buyFloor}
+                disabled={!target.executorReady || !target.bestListing || buying}
+                title={
+                  !target.executorReady
+                    ? 'Set PRIVATE_KEY + RPC_URL to enable buying'
+                    : !target.bestListing
+                      ? 'No floor listing to buy yet'
+                      : 'Buy the floor now'
+                }
+                className="border border-terminal-green text-terminal-green rounded px-4 py-2 text-sm hover:bg-terminal-green/10 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                View on OpenSea ↗
-              </a>
+                {buying ? 'Buying…' : '⚡ Buy floor now'}
+              </button>
+              {target.openseaUrl && (
+                <a
+                  href={target.openseaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto text-xs text-terminal-muted hover:text-terminal-text underline"
+                >
+                  View on OpenSea ↗
+                </a>
+              )}
+            </div>
+
+            {!target.executorReady && (
+              <p className="text-[11px] text-terminal-amber mt-2">
+                Buying is disabled until PRIVATE_KEY + RPC_URL are configured.
+              </p>
+            )}
+
+            {buyResult && (
+              <div
+                className={`mt-3 text-xs border rounded px-3 py-2 ${
+                  buyResult.ok ? 'border-terminal-green text-terminal-green' : 'border-terminal-red neg'
+                }`}
+              >
+                {buyResult.ok ? (
+                  <span>
+                    ✓ Submitted{buyResult.spentEth ? ` · ${buyResult.spentEth.toFixed(5)} ETH` : ''} ·{' '}
+                    {buyResult.explorerUrl ? (
+                      <a href={buyResult.explorerUrl} target="_blank" rel="noreferrer" className="underline">
+                        {buyResult.txHash?.slice(0, 10)}… ↗
+                      </a>
+                    ) : (
+                      buyResult.txHash
+                    )}
+                  </span>
+                ) : (
+                  <span>✗ {buyResult.error}</span>
+                )}
+              </div>
             )}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+interface BuyResult {
+  ok: boolean;
+  txHash?: string;
+  explorerUrl?: string;
+  spentEth?: number;
+  slug?: string;
+  error?: string;
 }
 
 /** Floor (ask) vs best offer (bid) vs live spread between them. */

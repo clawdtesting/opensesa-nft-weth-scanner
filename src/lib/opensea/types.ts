@@ -110,7 +110,15 @@ export interface OSProtocolData {
     startTime: string;
     endTime: string;
     orderType?: number;
+    zone?: string;
+    zoneHash?: string;
+    salt?: string;
+    conduitKey?: string;
+    counter?: number | string;
+    totalOriginalConsiderationItems?: number;
   };
+  /** Seller's signature over the order — required to fulfill it. */
+  signature?: string;
 }
 
 export interface OSListing {
