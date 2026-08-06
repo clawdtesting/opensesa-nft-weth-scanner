@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SnipeTarget } from '@/domain/types';
-import { formatEth } from '@/lib/money';
+import { formatEth, formatPct } from '@/lib/money';
 
 // OpenSea chain identifiers the sniper can target.
 const CHAINS = [
@@ -129,8 +129,9 @@ export function SnipeView() {
             </span>
           </div>
 
+          <SpreadStrip floor={target.floorEth} offer={target.bestOfferEth} />
+
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 p-4 text-sm border-b border-terminal-border">
-            <Row label="Floor" value={target.floorEth !== null ? `${formatEth(target.floorEth)} ${target.bestListing?.currency ?? 'ETH'}` : '—'} />
             <Row label="Collection" value={target.slug ?? '—'} />
             <Row label="Best order" value={target.bestListing ? short(target.bestListing.orderHash) : '—'} />
             <Row label="Token id" value={target.bestListing?.tokenId ?? '—'} />
@@ -167,6 +168,37 @@ export function SnipeView() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Floor (ask) vs best offer (bid) vs live spread between them. */
+function SpreadStrip({ floor, offer }: { floor: number | null; offer: number | null }) {
+  const spread = floor !== null && offer !== null ? floor - offer : null; // ask − bid
+  const pct = spread !== null && floor ? spread / floor : null;
+  // Best offer at/above floor => buy the floor and sell straight into the offer.
+  const flip = floor !== null && offer !== null && offer >= floor;
+
+  return (
+    <div className="grid grid-cols-3 divide-x divide-terminal-border border-b border-terminal-border">
+      <Metric label="Floor · ask" value={floor !== null ? `Ξ ${formatEth(floor)}` : '—'} />
+      <Metric label="Best offer · bid" value={offer !== null ? `Ξ ${formatEth(offer)}` : '—'} />
+      <Metric
+        label="Spread"
+        value={spread !== null ? `${spread < 0 ? '−' : ''}Ξ ${formatEth(Math.abs(spread))}` : '—'}
+        sub={pct !== null ? `${formatPct(Math.abs(pct))}${flip ? ' · ⚡ flip' : ''}` : undefined}
+        valueClass={flip ? 'pos' : ''}
+      />
+    </div>
+  );
+}
+
+function Metric({ label, value, sub, valueClass }: { label: string; value: string; sub?: string; valueClass?: string }) {
+  return (
+    <div className="px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wide text-terminal-muted">{label}</div>
+      <div className={`text-lg font-mono mt-0.5 ${valueClass ?? ''}`}>{value}</div>
+      {sub && <div className={`text-[11px] mt-0.5 ${valueClass ?? 'text-terminal-muted'}`}>{sub}</div>}
     </div>
   );
 }

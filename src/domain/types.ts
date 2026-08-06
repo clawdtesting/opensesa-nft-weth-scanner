@@ -252,6 +252,8 @@ export interface SnipeTarget {
   openseaUrl: string | null;
   floorEth: number | null;
   bestListing: FloorListing | null;
+  /** Highest collection-wide offer (the best bid), per item, in ETH/WETH. */
+  bestOfferEth: number | null;
   /** True when server wallet credentials (PRIVATE_KEY + RPC_URL) are configured. */
   executorReady: boolean;
   fetchedAt: string; // ISO timestamp

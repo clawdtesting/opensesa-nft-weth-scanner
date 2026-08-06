@@ -1,6 +1,6 @@
 import 'server-only';
 import { getOpenSeaClient } from '@/lib/opensea/client';
-import { parseListing } from '@/lib/opensea/parse';
+import { parseListing, parseOffer } from '@/lib/opensea/parse';
 import { buyerReady } from '@/config/env';
 import { logger } from '@/lib/logger';
 import type { SnipeTarget, FloorListing } from '@/domain/types';
@@ -25,6 +25,7 @@ export async function fetchTarget(contractRaw: string, chain: string): Promise<S
     openseaUrl: null,
     floorEth: null,
     bestListing: null,
+    bestOfferEth: null,
     executorReady: buyerReady(),
     fetchedAt: new Date().toISOString(),
   };
@@ -85,6 +86,19 @@ export async function fetchTarget(contractRaw: string, chain: string): Promise<S
   } catch (err) {
     logger.warn('snipe.listings_failed', { slug, error: String(err) });
     base.note = 'Collection found, but listings could not be loaded right now.';
+  }
+
+  // 4) Highest collection-wide offer = the best bid (per item).
+  try {
+    const res = await client.getCollectionOffers(slug, { limit: 100 });
+    let best: number | null = null;
+    for (const offer of res.offers ?? []) {
+      const parsed = parseOffer(offer);
+      if (parsed && (best === null || parsed.priceEth > best)) best = parsed.priceEth;
+    }
+    base.bestOfferEth = best;
+  } catch (err) {
+    logger.warn('snipe.offers_failed', { slug, error: String(err) });
   }
 
   return base;
