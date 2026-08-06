@@ -237,6 +237,9 @@ export interface DiscoveredContract {
   decimals: number | null;
   /** Most recent block in which we saw a mint from this contract. */
   lastBlock: number;
+  /** True when the contract had no code at the scan window's start block —
+   * i.e. it was deployed *within* the scanned range (a genuinely new drop). */
+  isNew: boolean;
 }
 
 export interface ChainScanResult {

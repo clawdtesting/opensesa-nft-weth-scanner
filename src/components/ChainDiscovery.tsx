@@ -104,6 +104,11 @@ function ContractList({ title, rows, empty }: { title: string; rows: DiscoveredC
             <li key={c.address} className="flex items-center gap-2 border border-terminal-border rounded px-2 py-1.5 text-sm">
               <div className="min-w-0">
                 <div className="text-terminal-text truncate">
+                  {c.isNew && (
+                    <span className="text-[9px] uppercase tracking-wide border border-terminal-green text-terminal-green rounded px-1 py-0.5 mr-1">
+                      new
+                    </span>
+                  )}
                   {c.symbol || c.name || 'unknown'}{' '}
                   <span className="text-[10px] text-terminal-muted">{c.kind}</span>
                 </div>

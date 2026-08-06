@@ -101,7 +101,9 @@ export async function scanNewContracts(blocks = DEFAULT_BLOCKS): Promise<ChainSc
   }
 
   const ranked = [...seen.entries()].sort((x, y) => (y[1] > x[1] ? 1 : y[1] < x[1] ? -1 : 0)).slice(0, MAX_CLASSIFY);
-  const contracts = await Promise.all(ranked.map(([addr, block]) => classify(addr, block)));
+  const contracts = await Promise.all(ranked.map(([addr, block]) => classify(addr, block, fromBlock)));
+  // Brand-new deployments (no code at the window start) float to the top.
+  contracts.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0) || b.lastBlock - a.lastBlock);
 
   const result: ChainScanResult = {
     contracts,
@@ -115,11 +117,21 @@ export async function scanNewContracts(blocks = DEFAULT_BLOCKS): Promise<ChainSc
   return result;
 }
 
-async function classify(addrLower: string, block: bigint): Promise<DiscoveredContract> {
+async function classify(addrLower: string, block: bigint, fromBlock: bigint): Promise<DiscoveredContract> {
   const client = getPublicClient();
   const address = getAddress(addrLower);
   let kind: ContractKind = 'unknown';
   let decimals: number | null = null;
+
+  // Brand-new? No bytecode at the window's start block => deployed since then.
+  // Best-effort: needs historical state, so a non-archive RPC just leaves it false.
+  let isNew = false;
+  try {
+    const code = await client.request({ method: 'eth_getCode', params: [address, numberToHex(fromBlock)] });
+    isNew = !code || code === '0x';
+  } catch {
+    /* non-archive node or transient error */
+  }
 
   // ERC-20 exposes decimals(); NFTs revert on it.
   try {
@@ -146,7 +158,7 @@ async function classify(addrLower: string, block: bigint): Promise<DiscoveredCon
     /* optional */
   }
 
-  return { address, kind, name, symbol, decimals, lastBlock: Number(block) };
+  return { address, kind, name, symbol, decimals, lastBlock: Number(block), isNew };
 }
 
 async function supports(address: `0x${string}`, interfaceId: Hex): Promise<boolean> {
