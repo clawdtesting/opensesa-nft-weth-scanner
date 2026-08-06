@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SnipeTarget } from '@/domain/types';
-import { formatEth, formatPct } from '@/lib/money';
+import { formatPct } from '@/lib/money';
 
 // OpenSea chain identifiers the sniper can target (Robinhood first / default).
 const CHAINS = [
@@ -39,10 +39,6 @@ export function SnipeView() {
       setBuyResult({ ok: false, error: 'Set a max price (ETH) before buying.' });
       return;
     }
-    const floorTxt = target?.floorEth !== null && target?.floorEth !== undefined ? `${target.floorEth} ETH` : 'unknown';
-    if (!window.confirm(`Buy the floor of ${target?.name ?? contract} for up to ${cap} ETH?\nCurrent floor: ${floorTxt}.\nThis spends real funds.`)) {
-      return;
-    }
     setBuying(true);
     setBuyResult(null);
     try {
@@ -58,7 +54,7 @@ export function SnipeView() {
     } finally {
       setBuying(false);
     }
-  }, [maxPrice, target, contract, chain]);
+  }, [maxPrice, contract, chain]);
 
   const fetchTarget = useCallback(
     async (silent = false) => {
@@ -270,11 +266,11 @@ function SpreadStrip({ floor, offer }: { floor: number | null; offer: number | n
 
   return (
     <div className="grid grid-cols-3 divide-x divide-terminal-border border-b border-terminal-border">
-      <Metric label="Floor · ask" value={floor !== null ? `Ξ ${formatEth(floor)}` : '—'} />
-      <Metric label="Best offer · bid" value={offer !== null ? `Ξ ${formatEth(offer)}` : '—'} />
+      <Metric label="Floor · ask" value={floor !== null ? `Ξ ${fmtPrice(floor)}` : '—'} />
+      <Metric label="Best offer · bid" value={offer !== null ? `Ξ ${fmtPrice(offer)}` : '—'} />
       <Metric
         label="Spread"
-        value={spread !== null ? `${spread < 0 ? '−' : ''}Ξ ${formatEth(Math.abs(spread))}` : '—'}
+        value={spread !== null ? `${spread < 0 ? '−' : ''}Ξ ${fmtPrice(Math.abs(spread))}` : '—'}
         sub={pct !== null ? `${formatPct(Math.abs(pct))}${flip ? ' · ⚡ flip' : ''}` : undefined}
         valueClass={flip ? 'pos' : ''}
       />
@@ -305,6 +301,19 @@ function Row({ label, value, valueClass }: { label: string; value: string; value
 
 function short(s: string): string {
   return s.length > 14 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s;
+}
+
+/**
+ * Adaptive ETH price formatter: keeps enough significant digits for the tiny
+ * sub-0.001 prices common on Robinhood chain (e.g. 0.00008399), so the on-screen
+ * value matches the real one instead of rounding to 4 decimals.
+ */
+function fmtPrice(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '—';
+  if (v === 0) return '0';
+  if (v >= 1) return String(parseFloat(v.toFixed(4)));
+  // 4 significant figures, trailing zeros stripped.
+  return String(parseFloat(v.toPrecision(4)));
 }
 
 function fmtTime(iso: string): string {
