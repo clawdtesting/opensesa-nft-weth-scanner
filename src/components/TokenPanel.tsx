@@ -18,6 +18,7 @@ interface Sample {
 
 interface Activity {
   address: string;
+  rpcOk: boolean;
   hasCode: boolean;
   deploymentBlock: number | null;
   deployedAt: string | null;
@@ -230,16 +231,24 @@ export function TokenPanel({ initialAddress }: { initialAddress?: string } = {})
             <div className="flex items-center gap-2">
               <span
                 className={`text-sm font-semibold ${
-                  activity?.tradingStarted ? 'pos' : activity?.hasCode ? 'text-terminal-amber' : 'text-terminal-muted'
+                  activity && !activity.rpcOk
+                    ? 'neg'
+                    : activity?.tradingStarted
+                      ? 'pos'
+                      : activity?.hasCode
+                        ? 'text-terminal-amber'
+                        : 'text-terminal-muted'
                 }`}
               >
                 {!activity
                   ? 'Checking…'
-                  : activity.tradingStarted
-                    ? '🟢 TRADING LIVE'
-                    : activity.hasCode
-                      ? '🟡 Deployed · not trading yet'
-                      : '⚪ Not deployed yet'}
+                  : !activity.rpcOk
+                    ? '⚠️ RPC unreachable — set RPC_URL'
+                    : activity.tradingStarted
+                      ? '🟢 TRADING LIVE'
+                      : activity.hasCode
+                        ? '🟡 Deployed · not trading yet'
+                        : '⚪ Not deployed yet'}
               </span>
               {delta > 0 && <span className="text-[11px] pos">+{delta} new</span>}
               <span className="ml-auto text-[11px] text-terminal-muted">

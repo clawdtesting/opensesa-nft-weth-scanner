@@ -77,6 +77,8 @@ export async function getTokenPrice(addressRaw: string): Promise<TokenPrice> {
 
 export interface TokenActivity {
   address: string;
+  /** False when the RPC couldn't be reached at all (distinct from "not deployed"). */
+  rpcOk: boolean;
   hasCode: boolean;
   deploymentBlock: number | null;
   deployedAt: string | null; // ISO
@@ -104,6 +106,7 @@ export async function getTokenActivity(addressRaw: string): Promise<TokenActivit
   const fetchedAt = new Date().toISOString();
   const empty: TokenActivity = {
     address,
+    rpcOk: true,
     hasCode: false,
     deploymentBlock: null,
     deployedAt: null,
@@ -128,7 +131,7 @@ export async function getTokenActivity(addressRaw: string): Promise<TokenActivit
     latest = await client.getBlockNumber();
   } catch (err) {
     logger.warn('token.activity_rpc_down', { error: String(err) });
-    return { ...empty, note: 'RPC unreachable — set RPC_URL to a working Robinhood endpoint.' };
+    return { ...empty, rpcOk: false, note: 'RPC unreachable — set RPC_URL to a working Robinhood endpoint.' };
   }
 
   const codeNow = await client.request({ method: 'eth_getCode', params: [addr, numberToHex(latest)] }).catch(() => '0x');
@@ -151,6 +154,7 @@ export async function getTokenActivity(addressRaw: string): Promise<TokenActivit
 
   return {
     address: addr,
+    rpcOk: true,
     hasCode: true,
     deploymentBlock: deploymentBlock !== null ? Number(deploymentBlock) : null,
     deployedAt,
