@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
+  { href: '/yard', label: '$YARD' },
   { href: '/buy', label: 'NFT BUY' },
   { href: '/', label: 'Opportunities' },
   { href: '/drops', label: 'Drops' },

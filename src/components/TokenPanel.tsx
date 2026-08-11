@@ -48,8 +48,8 @@ const TIMEFRAMES = [
 const BUFFER_MS = 300_000; // keep 5 minutes of samples
 const SAMPLE_MS = 3_000; // poll price every 3s
 
-export function TokenPanel() {
-  const [address, setAddress] = useState('');
+export function TokenPanel({ initialAddress }: { initialAddress?: string } = {}) {
+  const [address, setAddress] = useState(initialAddress ?? '');
   const [info, setInfo] = useState<TokenInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -101,6 +101,16 @@ export function TokenPanel() {
     window.addEventListener('nftbuy:use-token', handler);
     return () => window.removeEventListener('nftbuy:use-token', handler);
   }, [fetchInfo]);
+
+  // Auto-load a preset token (e.g. a dedicated $YARD tab) once on mount.
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (didAutoLoad.current) return;
+    if (initialAddress && ADDRESS_RE.test(initialAddress.trim())) {
+      didAutoLoad.current = true;
+      void fetchInfo(initialAddress);
+    }
+  }, [initialAddress, fetchInfo]);
 
   // Live trading-activity polling while armed.
   useEffect(() => {
