@@ -1,0 +1,24 @@
+{
+  "name": "robinhood-up-sniper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sniper bot: detect a new liquidity pool for a token on the up. DEX (ve(3,3)) on Robinhood Chain and auto-buy with ETH.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
