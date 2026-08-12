@@ -1,5 +1,5 @@
 import 'server-only';
-import { createPublicClient, http, formatEther, formatUnits, getAddress, isAddress } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, formatUnits, getAddress, isAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { robinhoodChain } from './robinhood';
 import { env } from '@/config/env';
@@ -14,6 +14,19 @@ export const ERC20_ABI = [
 /** A read-only viem client bound to the Robinhood chain. */
 export function getPublicClient() {
   return createPublicClient({ chain: robinhoodChain, transport: http() });
+}
+
+/** A wallet client for sending transactions; null when no PRIVATE_KEY is set. */
+export function getWalletClient() {
+  const pk = env.buyer.privateKey;
+  if (!pk) return null;
+  try {
+    const key = (pk.startsWith('0x') ? pk : `0x${pk}`) as `0x${string}`;
+    const account = privateKeyToAccount(key);
+    return createWalletClient({ account, chain: robinhoodChain, transport: http() });
+  } catch {
+    return null;
+  }
 }
 
 /**
